@@ -4,12 +4,12 @@ import { cn } from "@/lib/utils";
 type Tone = "neutral" | "info" | "accent" | "success" | "warning" | "danger";
 
 const TONES: Record<Tone, string> = {
-  neutral: "bg-black/[0.06] text-foreground/80",
-  info: "bg-info-soft text-info",
-  accent: "bg-accent-soft text-accent",
-  success: "bg-success-soft text-success",
-  warning: "bg-warning-soft text-warning",
-  danger: "bg-danger-soft text-danger",
+  neutral: "bg-black/[0.04] text-foreground/80 border border-border",
+  info: "bg-info-soft text-info border border-info/20 font-medium",
+  accent: "bg-accent-soft text-accent border border-accent/25 font-medium",
+  success: "bg-success-soft text-success border border-success/20 font-medium",
+  warning: "bg-warning-soft text-warning border border-warning/20 font-medium",
+  danger: "bg-danger-soft text-danger border border-danger/20 font-medium",
 };
 
 export function Badge({ tone = "neutral", className, children }: { tone?: Tone; className?: string; children: React.ReactNode }) {

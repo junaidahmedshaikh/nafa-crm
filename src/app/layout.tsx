@@ -14,8 +14,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} font-sans h-full antialiased`}>
+      <body className="min-h-full flex flex-col font-sans antialiased text-foreground bg-background">
         {children}
         <Toaster position="top-right" toastOptions={{ classNames: { toast: "!rounded-md !border !border-border" } }} />
       </body>

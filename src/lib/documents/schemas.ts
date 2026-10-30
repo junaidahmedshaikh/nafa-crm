@@ -132,6 +132,8 @@ export type QuotationFormValues = z.input<typeof quotationInputSchema>;
 
 export const invoiceInputSchema = z.object({
   ...clientFields,
+  client_name: reqText("Contact person", 200),
+  client_company: reqText("Company", 200),
   quotation_id: optUuid,
   quotation_number: optText(50),
   project_name: optText(200),

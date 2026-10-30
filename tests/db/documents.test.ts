@@ -64,11 +64,26 @@ describe("quotations: save, number allocation and locking", () => {
     });
   });
 
-  it("allocates sequential, formatted numbers only when issued", async () => {
+  it("allocates sequential, formatted numbers only when issued and assigns -V02 suffix for revisions without advancing sequence", async () => {
     await as(async () => {
-      const a = await issueQuotation(await newQuotation());
-      const b = await issueQuotation(await newQuotation());
-      expect(a).toMatch(/^NAFA-Q-\d{3}$/);
+      const q1Id = await newQuotation();
+      const a = await issueQuotation(q1Id);
+      expect(a).toMatch(/^NAFA-QUO-26-\d{3}$/);
+
+      // Revision of q1
+      const revId = await newQuotation({ revision_of: q1Id });
+      const revNum = await issueQuotation(revId);
+      expect(revNum).toBe(`${a}-V02`);
+
+      // Revision of rev1
+      const rev2Id = await newQuotation({ revision_of: revId });
+      const rev2Num = await issueQuotation(rev2Id);
+      expect(rev2Num).toBe(`${a}-V03`);
+
+      // Brand new quotation should receive the NEXT sequential number
+      const q2Id = await newQuotation();
+      const b = await issueQuotation(q2Id);
+      expect(b).toMatch(/^NAFA-QUO-26-\d{3}$/);
       const n = (s: string) => Number(s.split("-").pop());
       expect(n(b)).toBe(n(a) + 1);
     });
@@ -266,7 +281,7 @@ describe("invoices and payments", () => {
     await as(async () => {
       const id = await newInvoice();
       const number = await issueInvoice(id);
-      expect(number).toMatch(/^NAFA-INV-\d{3}$/);
+      expect(number).toMatch(/^NAFA-INV-26-\d{3}$/);
       await expect(q(`update invoices set grand_total=5 where id=$1`, [id])).rejects.toThrow(/DOCUMENT_LOCKED/);
       await expect(q(`update invoice_items set rate=1 where invoice_id=$1`, [id])).rejects.toThrow(/DOCUMENT_LOCKED/);
       await q(`insert into invoice_payments (invoice_id, paid_on, amount) values ($1,'2026-11-01',100)`, [id]);
@@ -292,7 +307,7 @@ describe("proposals", () => {
 
       const [row] = await q<{ updated_at: string }>(`select updated_at from proposals where id=$1`, [id]);
       const [{ n }] = await q<{ n: string }>(`select public.issue_document('proposal', $1, '{}'::jsonb, $2::timestamptz) as n`, [id, row.updated_at]);
-      expect(n).toMatch(/^NAFA-P-\d{3}$/);
+      expect(n).toMatch(/^NAFA-PROP-26-\d{3}$/);
       await expect(q(`update proposals set title='Hack' where id=$1`, [id])).rejects.toThrow(/DOCUMENT_LOCKED/);
       await expect(q(`update proposal_sections set body='Hack' where proposal_id=$1`, [id])).rejects.toThrow(/DOCUMENT_LOCKED/);
       await expect(q(`insert into proposals (commercial_mode) values ('linked')`)).rejects.toThrow(/proposals_linked_needs_quotation/);
@@ -337,7 +352,7 @@ describe("authorisation (RLS) for document tables", () => {
     await as(async () => {
       await q(`update document_settings set bank_name='Federal Bank'`);
       await q(`update document_sequences set prefix='NAFA-QT-' where doc_type='quotation'`);
-      await q(`update document_sequences set prefix='NAFA-Q-' where doc_type='quotation'`);
+      await q(`update document_sequences set prefix='NAFA-QUO-26-' where doc_type='quotation'`);
     });
     // a deactivated former admin-like member sees nothing and cannot write
     await asUser(db, INACTIVE_ID, async () => {

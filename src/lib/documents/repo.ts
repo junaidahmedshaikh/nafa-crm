@@ -20,6 +20,35 @@ export const getDocSettings = cache(async (): Promise<DocSettings> => {
   return data as DocSettings;
 });
 
+export async function getNextDocumentNumber(supabase: SupabaseClient, docType: "quotation" | "invoice" | "proposal"): Promise<string> {
+  const { data } = await supabase
+    .from("document_sequences")
+    .select("prefix, padding, next_number")
+    .eq("doc_type", docType)
+    .maybeSingle();
+  const yy = new Date().getFullYear().toString().slice(-2);
+  if (!data) return docType === "quotation" ? `NAFA-QUO-${yy}-001` : docType === "invoice" ? `NAFA-INV-${yy}-001` : `NAFA-PROP-${yy}-001`;
+  const prefix = data.prefix.replace("{YY}", yy);
+  return `${prefix}${String(data.next_number).padStart(data.padding, "0")}`;
+}
+
+export async function getProspectiveQuotationNumber(supabase: SupabaseClient, revisionOfId?: string | null): Promise<string> {
+  if (revisionOfId) {
+    const { data } = await supabase.from("quotations").select("number").eq("id", revisionOfId).maybeSingle();
+    if (data?.number) {
+      const base = data.number.replace(/-V\d+$/, "");
+      const { data: revs } = await supabase.from("quotations").select("number").like("number", `${base}%`);
+      let maxV = 1;
+      for (const r of (revs ?? []) as { number: string | null }[]) {
+        const match = r.number?.match(/-V(\d+)$/);
+        if (match) maxV = Math.max(maxV, parseInt(match[1], 10));
+      }
+      return `${base}-V${String(maxV + 1).padStart(2, "0")}`;
+    }
+  }
+  return getNextDocumentNumber(supabase, "quotation");
+}
+
 const oneOf = <T extends string>(list: readonly T[], v: string): T | "" => (list.includes(v as T) ? (v as T) : "");
 
 export type ListParams = { q: string; status: string; page: number };
@@ -125,12 +154,12 @@ export async function getProposalFull(supabase: SupabaseClient, id: string) {
   if (!row) return null;
   const [{ data: sections }, { data: attachments }] = await Promise.all([
     supabase.from("proposal_sections").select("*").eq("proposal_id", id).order("position"),
-    supabase.from("proposal_attachments").select("id, section_id, filename, content_type, size_bytes, caption, position").eq("proposal_id", id).order("position"),
+    supabase.from("proposal_attachments").select("id, section_id, filename, content_type, size_bytes, caption, position, data_uri").eq("proposal_id", id).order("position"),
   ]);
   return {
     row: row as ProposalRow & Record<string, unknown>,
     sections: (sections ?? []) as { id: string; type: string; title: string; body: string; included: boolean; position: number }[],
-    attachments: (attachments ?? []) as { id: string; section_id: string | null; filename: string; content_type: string; size_bytes: number; caption: string; position: number }[],
+    attachments: (attachments ?? []) as { id: string; section_id: string | null; filename: string; content_type: string; size_bytes: number; caption: string; position: number; data_uri?: string }[],
   };
 }
 

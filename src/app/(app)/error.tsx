@@ -11,7 +11,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
         icon={AlertTriangle}
         title="This page could not be loaded"
         description={
-          error.message.includes("Supabase is not configured")
+          error.message.includes("Supabase is not configured") || error.message.includes("Document settings") || process.env.NODE_ENV !== "production"
             ? error.message
             : "Something went wrong while loading your data. Check your connection and try again."
         }

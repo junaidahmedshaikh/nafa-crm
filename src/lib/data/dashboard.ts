@@ -15,6 +15,11 @@ export type DashboardData = {
     wonThisMonth: number;
     overdueFollowUps: number;
     dueToday: number;
+    quotationsAwaiting: number;
+    quotationsAccepted: number;
+    invoicesOutstanding: number;
+    invoicesOverdue: number;
+    totalReceived: number;
   };
   pipeline: { status: LeadStatus; count: number; revenue: number }[];
   recentLeads: Lead[];
@@ -27,7 +32,23 @@ export async function getDashboardData(supabase: SupabaseClient, now = new Date(
   const monthStart = istMonthStart(now);
   const leadCount = () => supabase.from("leads").select("id", { count: "exact", head: true }).is("archived_at", null);
 
-  const [active, created, qualified, proposals, won, followCounts, pipelineRes, recent, upcoming, total] = await Promise.all([
+  const [
+    active,
+    created,
+    qualified,
+    proposals,
+    won,
+    followCounts,
+    pipelineRes,
+    recent,
+    upcoming,
+    total,
+    qAwaiting,
+    qAccepted,
+    invOutstanding,
+    invOverdue,
+    paysRes,
+  ] = await Promise.all([
     leadCount().in("status", OPEN_STATUSES),
     leadCount().gte("created_at", monthStart.toISOString()),
     leadCount().in("status", QUALIFIED_STATUSES),
@@ -43,6 +64,11 @@ export async function getDashboardData(supabase: SupabaseClient, now = new Date(
       .order("due_at", { ascending: true })
       .limit(8),
     leadCount(),
+    supabase.from("quotations").select("id", { count: "exact", head: true }).eq("status", "sent"),
+    supabase.from("quotations").select("id", { count: "exact", head: true }).eq("status", "accepted"),
+    supabase.from("invoices").select("id", { count: "exact", head: true }).eq("state", "issued"),
+    supabase.from("invoice_list").select("id", { count: "exact", head: true }).eq("payment_status", "overdue"),
+    supabase.from("invoice_payments").select("amount").is("voided_at", null),
   ]);
 
   const byStatus = new Map<string, { count: number; revenue: number }>();
@@ -51,6 +77,8 @@ export async function getDashboardData(supabase: SupabaseClient, now = new Date(
   }
 
   const ist = new Date(monthStart.getTime() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  const totalReceived = (paysRes.data ?? []).reduce((sum, p) => sum + Number((p as { amount?: number | string }).amount || 0), 0);
+
   return {
     metrics: {
       activeLeads: active.count ?? 0,
@@ -60,6 +88,11 @@ export async function getDashboardData(supabase: SupabaseClient, now = new Date(
       wonThisMonth: won.count ?? 0,
       overdueFollowUps: followCounts.overdue,
       dueToday: followCounts.today,
+      quotationsAwaiting: qAwaiting.count ?? 0,
+      quotationsAccepted: qAccepted.count ?? 0,
+      invoicesOutstanding: invOutstanding.count ?? 0,
+      invoicesOverdue: invOverdue.count ?? 0,
+      totalReceived,
     },
     pipeline: LEAD_STATUSES.map((status) => ({
       status,

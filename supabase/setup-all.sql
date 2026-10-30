@@ -561,7 +561,7 @@ create table public.document_sequences (
   updated_at   timestamptz not null default now()
 );
 insert into public.document_sequences (doc_type, prefix) values
-  ('quotation', 'NAFA-Q-'), ('proposal', 'NAFA-P-'), ('invoice', 'NAFA-INV-');
+  ('quotation', 'NAFA-QUO-26-'), ('proposal', 'NAFA-PROP-26-'), ('invoice', 'NAFA-INV-26-');
 
 -- A counter can be re-prefixed or advanced, but never wound back (numbers are never reused).
 create function public.document_sequences_guard() returns trigger language plpgsql as $$
@@ -578,7 +578,10 @@ create trigger document_sequences_guard before update on public.document_sequenc
 /** Atomically allocates the next number. The UPDATE takes a row lock, so concurrent callers queue up. */
 create function public.next_document_number(p_type public.document_type) returns text
 language plpgsql security definer set search_path = '' as $$
-declare s record;
+declare
+  s record;
+  v_prefix text;
+  v_yy text;
 begin
   if not public.is_team_member() then
     raise exception 'NOT_AUTHORISED' using errcode = '42501';
@@ -587,7 +590,10 @@ begin
      set next_number = next_number + 1
    where doc_type = p_type
   returning prefix, padding, next_number - 1 as n into s;
-  return s.prefix || lpad(s.n::text, s.padding, '0');
+
+  v_yy := to_char(now() at time zone 'Asia/Kolkata', 'YY');
+  v_prefix := replace(s.prefix, '{YY}', v_yy);
+  return v_prefix || lpad(s.n::text, s.padding, '0');
 end $$;
 revoke all on function public.next_document_number(public.document_type) from public, anon, authenticated;
 
@@ -1268,20 +1274,62 @@ declare
   v_number text;
   v_updated timestamptz;
   v_status text;
+  v_revision_of uuid;
+  v_parent_number text;
+  v_base_number text;
+  v_next_version int;
 begin
   if not public.is_team_member() then raise exception 'NOT_AUTHORISED' using errcode = '42501'; end if;
   if p_type = 'quotation' then
-    select status::text, updated_at into v_status, v_updated from public.quotations where id = p_id for update;
+    select status::text, updated_at, revision_of into v_status, v_updated, v_revision_of from public.quotations where id = p_id for update;
   elsif p_type = 'invoice' then
     select state::text, updated_at into v_status, v_updated from public.invoices where id = p_id for update;
   else
-    select status::text, updated_at into v_status, v_updated from public.proposals where id = p_id for update;
+    select status::text, updated_at, revision_of into v_status, v_updated, v_revision_of from public.proposals where id = p_id for update;
   end if;
   if v_status is null then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
   if v_status <> 'draft' then raise exception 'ALREADY_ISSUED' using errcode = '23514'; end if;
   if v_updated is distinct from p_expected_updated_at then raise exception 'STALE: the draft changed while issuing; reload and try again' using errcode = '40001'; end if;
 
-  v_number := public.next_document_number(p_type);
+  -- Revision numbering: retain parent base number and append -V02, -V03 without consuming a new sequence counter
+  if v_revision_of is not null then
+    if p_type = 'quotation' then
+      select number into v_parent_number from public.quotations where id = v_revision_of;
+      if v_parent_number is not null then
+        v_base_number := regexp_replace(v_parent_number, '-V[0-9]+$', '');
+        select coalesce(max(
+          nullif(substring(number from '-V([0-9]+)$'), '')::int
+        ), 1) + 1
+        into v_next_version
+        from public.quotations
+        where number = v_base_number or number ~ ('^' || v_base_number || '-V[0-9]+$');
+
+        v_number := v_base_number || '-V' || lpad(v_next_version::text, 2, '0');
+      else
+        v_number := public.next_document_number(p_type);
+      end if;
+    elsif p_type = 'proposal' then
+      select number into v_parent_number from public.proposals where id = v_revision_of;
+      if v_parent_number is not null then
+        v_base_number := regexp_replace(v_parent_number, '-V[0-9]+$', '');
+        select coalesce(max(
+          nullif(substring(number from '-V([0-9]+)$'), '')::int
+        ), 1) + 1
+        into v_next_version
+        from public.proposals
+        where number = v_base_number or number ~ ('^' || v_base_number || '-V[0-9]+$');
+
+        v_number := v_base_number || '-V' || lpad(v_next_version::text, 2, '0');
+      else
+        v_number := public.next_document_number(p_type);
+      end if;
+    else
+      v_number := public.next_document_number(p_type);
+    end if;
+  else
+    v_number := public.next_document_number(p_type);
+  end if;
+
   perform set_config('nafa.issuing', '1', true);
   if p_type = 'quotation' then
     update public.quotations set number = v_number, status = 'sent', issued_at = now(), sent_at = now(),

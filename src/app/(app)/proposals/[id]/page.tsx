@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertCircle } from "lucide-react";
@@ -66,6 +67,24 @@ export default async function ProposalDetailPage({ params }: PageProps<"/proposa
               />
             </div>
           </Card>
+          {full.attachments.length > 0 && (
+            <Card>
+              <CardHeader title={`Attached Images (${full.attachments.length})`} />
+              <div className="p-4 grid grid-cols-2 gap-2.5">
+                {full.attachments.map((att) => (
+                  <div key={att.id} className="group relative overflow-hidden rounded-lg border border-border bg-surface-muted/50 p-2 text-center">
+                    {att.data_uri ? (
+                      <img src={att.data_uri} alt={att.caption || att.filename} className="h-20 w-full object-cover rounded-md border border-border" />
+                    ) : (
+                      <div className="h-20 w-full rounded-md bg-surface border border-border flex items-center justify-center text-xs text-muted">Image</div>
+                    )}
+                    <p className="mt-1.5 truncate text-[11px] font-medium text-foreground">{att.filename}</p>
+                    <p className="text-[10px] text-muted">{Math.round(att.size_bytes / 1024)} KB</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           <Card>
             <CardHeader title="Activity" />
             <ol className="space-y-3 p-5">

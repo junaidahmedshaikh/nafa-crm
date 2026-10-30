@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Fonts/logo are read from disk by the PDF templates; make sure serverless bundles include them.
   outputFileTracingIncludes: { "/api/documents/**": ["./src/assets/**"], "/**": ["./src/assets/**"] },
-  serverExternalPackages: ["playwright-core"],
+  serverExternalPackages: ["playwright-core", "@sparticuz/chromium"],
   turbopack: {
     root: import.meta.dirname,
     rules: {

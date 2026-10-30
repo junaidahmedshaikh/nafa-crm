@@ -1,23 +1,25 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormProvider, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, ArrowDown, ArrowUp, ImagePlus, Plus, Trash2, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, Eye, ImagePlus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FormSection, Input, Select, Textarea } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/layout";
+import { Modal } from "@/components/ui/modal";
 import { ClientSection, PreviewPane } from "@/components/documents/builder-parts";
 import { deleteProposalImage, previewDocument, saveProposal, uploadProposalImage } from "@/lib/actions/documents";
 import type { LeadOption } from "@/lib/documents/repo";
 import { PROPOSAL_SECTION_TITLES, PROPOSAL_SECTION_TYPES, proposalInputSchema, type ProposalFormValues, type ProposalInput } from "@/lib/documents/schemas";
 import { formatINR } from "@/lib/format";
 
-type Attachment = { id: string; section_id: string | null; filename: string; size_bytes: number; caption: string };
+type Attachment = { id: string; section_id: string | null; filename: string; size_bytes: number; caption: string; data_uri?: string };
 type QuotationOption = { id: string; number: string | null; client_company: string; grand_total: number };
 const errText = (e: unknown): string | undefined => (e && typeof e === "object" && "message" in e ? String((e as { message?: unknown }).message ?? "") || undefined : undefined);
 
@@ -26,34 +28,186 @@ function ImageUploader({ proposalId, sectionId, attachments }: { proposalId: str
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const [caption, setCaption] = useState("");
+  const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [lightboxImage, setLightboxImage] = useState<Attachment | null>(null);
+
+  const sectionAttachments = attachments.filter((a) => a.section_id === sectionId);
+
   return (
-    <div className="mt-3 rounded-md border border-dashed border-border-strong p-3">
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Images &amp; moodboard</p>
-      {attachments.length > 0 && (
-        <ul className="mb-3 space-y-1">
-          {attachments.map((a) => (
-            <li key={a.id} className="flex items-center justify-between gap-2 rounded bg-surface-muted px-2 py-1 text-sm">
-              <span className="truncate">{a.filename} <span className="text-xs text-muted">({Math.round(a.size_bytes / 1024)} KB){a.caption ? ` · ${a.caption}` : ""}</span></span>
-              <Button size="icon" variant="ghost" aria-label={`Remove ${a.filename}`} onClick={() => startTransition(async () => { const r = await deleteProposalImage(a.id); if (r.ok) router.refresh(); else toast.error(r.error); })}><X className="h-4 w-4" /></Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Choose image" className="max-w-[16rem] text-sm" />
-        <Input aria-label="Caption" placeholder="Caption (optional)" className="w-56" value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={200} />
-        <Button size="sm" loading={pending} onClick={() => {
-          const file = fileRef.current?.files?.[0];
-          if (!file) return toast.error("Choose an image first.");
-          const fd = new FormData();
-          fd.set("file", file); fd.set("section_id", sectionId); fd.set("caption", caption);
-          startTransition(async () => {
-            const r = await uploadProposalImage(proposalId, fd);
-            if (r.ok) { toast.success("Image added"); setCaption(""); if (fileRef.current) fileRef.current.value = ""; router.refresh(); } else toast.error(r.error);
-          });
-        }}><ImagePlus className="h-4 w-4" aria-hidden />Add image</Button>
+    <div className="mt-3 rounded-xl border border-dashed border-border-strong bg-surface-muted/40 p-3.5 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+          Images &amp; Moodboard {sectionAttachments.length > 0 && `(${sectionAttachments.length})`}
+        </p>
+        <span className="text-[11px] text-muted">PNG, JPG, WebP · max 2 MB</span>
       </div>
-      <p className="mt-1 text-xs text-muted">PNG, JPEG or WebP, up to 2 MB. Images keep their aspect ratio in the PDF.</p>
+
+      {sectionAttachments.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sectionAttachments.map((a) => (
+            <div
+              key={a.id}
+              className="group relative flex items-center gap-3 rounded-lg border border-border bg-surface p-2 shadow-xs hover:border-border-strong transition-colors"
+            >
+              {a.data_uri ? (
+                <button
+                  type="button"
+                  onClick={() => setLightboxImage(a)}
+                  className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-border bg-surface-muted cursor-pointer hover:opacity-90 transition-opacity"
+                  title="Click to view full image thumbnail"
+                >
+                  <img src={a.data_uri} alt={a.caption || a.filename} className="h-full w-full object-cover" />
+                </button>
+              ) : (
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-surface-muted text-muted">
+                  <ImagePlus className="h-5 w-5" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-foreground">{a.filename}</p>
+                <p className="text-[11px] text-muted">{Math.round(a.size_bytes / 1024)} KB</p>
+                {a.caption && <p className="mt-0.5 truncate text-[11px] text-muted/90 italic">&ldquo;{a.caption}&rdquo;</p>}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {a.data_uri && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted hover:text-foreground"
+                    aria-label={`View ${a.filename}`}
+                    onClick={() => setLightboxImage(a)}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-muted hover:text-danger hover:bg-danger-soft"
+                  aria-label={`Remove ${a.filename}`}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const r = await deleteProposalImage(a.id);
+                      if (r.ok) {
+                        toast.success("Image removed");
+                        router.refresh();
+                      } else {
+                        toast.error(r.error);
+                      }
+                    })
+                  }
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Local instant file thumbnail preview before upload */}
+      {selectedPreview && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent-soft/40 p-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <img src={selectedPreview} alt="Selected preview" className="h-12 w-12 rounded-md object-cover border border-accent/40 shrink-0" />
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-foreground">{selectedFileName}</p>
+              <p className="text-[11px] font-medium text-accent">Selected for upload</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setSelectedPreview(null);
+              setSelectedFileName("");
+              if (fileRef.current) fileRef.current.value = "";
+            }}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          aria-label="Choose image"
+          className="text-xs file:mr-2 file:h-8 file:rounded-md file:border file:border-border file:bg-surface file:px-2.5 file:text-xs file:font-medium file:cursor-pointer hover:file:bg-surface-muted"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) {
+              setSelectedFileName(f.name);
+              setSelectedPreview(URL.createObjectURL(f));
+            } else {
+              setSelectedFileName("");
+              setSelectedPreview(null);
+            }
+          }}
+        />
+        <Input
+          aria-label="Caption"
+          placeholder="Caption (optional)"
+          className="h-8 w-56 text-xs"
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          maxLength={200}
+        />
+        <Button
+          size="sm"
+          loading={pending}
+          onClick={() => {
+            const file = fileRef.current?.files?.[0];
+            if (!file) return toast.error("Choose an image first.");
+            const fd = new FormData();
+            fd.set("file", file);
+            fd.set("section_id", sectionId);
+            fd.set("caption", caption);
+            startTransition(async () => {
+              const r = await uploadProposalImage(proposalId, fd);
+              if (r.ok) {
+                toast.success("Image added to proposal");
+                setCaption("");
+                setSelectedPreview(null);
+                setSelectedFileName("");
+                if (fileRef.current) fileRef.current.value = "";
+                router.refresh();
+              } else {
+                toast.error(r.error);
+              }
+            });
+          }}
+        >
+          <ImagePlus className="h-3.5 w-3.5" aria-hidden />
+          <span>Upload Image</span>
+        </Button>
+      </div>
+
+      {/* Lightbox / View Modal */}
+      {lightboxImage && (
+        <Modal
+          open={!!lightboxImage}
+          onClose={() => setLightboxImage(null)}
+          title={lightboxImage.filename}
+          description={lightboxImage.caption || `${Math.round(lightboxImage.size_bytes / 1024)} KB`}
+        >
+          <div className="mt-2 flex flex-col items-center justify-center overflow-hidden rounded-lg bg-black/5 p-2">
+            {lightboxImage.data_uri && (
+              <img
+                src={lightboxImage.data_uri}
+                alt={lightboxImage.caption || lightboxImage.filename}
+                className="max-h-[65vh] w-auto max-w-full rounded-md object-contain shadow-sm"
+              />
+            )}
+          </div>
+          {lightboxImage.caption && (
+            <p className="mt-3 text-center text-xs text-muted italic">&ldquo;{lightboxImage.caption}&rdquo;</p>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

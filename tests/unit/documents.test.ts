@@ -7,6 +7,7 @@ import { SAMPLE_ITEMS, sampleInvoice, sampleQuotation, referenceInvoice } from "
 import { renderInvoiceHtml } from "@/lib/documents/templates/invoice";
 import { renderProposalHtml } from "@/lib/documents/templates/proposal";
 import { renderQuotationHtml } from "@/lib/documents/templates/quotation";
+import { pdfFileName, sanitizeClientCompany } from "@/lib/documents/render";
 import type { ProposalRender } from "@/lib/documents/types";
 
 const settings: DocSettings = {
@@ -168,9 +169,80 @@ describe("input validation", () => {
   });
   it("validates items, invoices and payments", () => {
     expect(itemSchema.safeParse(item).success).toBe(true);
-    expect(invoiceInputSchema.safeParse({ ...base, quotation_id: "", quotation_number: "", project_name: "", project_location: "", project_date_text: "", place_of_supply: "", invoice_date: "2026-11-01", due_date: "2026-11-08", payment_terms_text: "", notes_text: "" }).success).toBe(true);
+    const inv = { ...base, client_name: "A. Person", client_company: "Acme Ltd", client_email: "", client_phone: "", client_gstin: "" };
+    // Only company and contact person are mandatory on an invoice.
+    expect(invoiceInputSchema.safeParse({ ...inv, client_name: "", quotation_id: "", invoice_date: "2026-11-01" }).success).toBe(false);
+    expect(invoiceInputSchema.safeParse({ ...inv, client_company: "", quotation_id: "", invoice_date: "2026-11-01" }).success).toBe(false);
+    expect(invoiceInputSchema.safeParse({ ...inv, quotation_id: "", quotation_number: "", project_name: "", project_location: "", project_date_text: "", place_of_supply: "", invoice_date: "2026-11-01", due_date: "2026-11-08", payment_terms_text: "", notes_text: "" }).success).toBe(true);
     expect(paymentInputSchema.safeParse({ paid_on: "2026-11-01", amount: "500", method: "upi" }).success).toBe(true);
     expect(paymentInputSchema.safeParse({ paid_on: "2026-11-01", amount: "0", method: "upi" }).success).toBe(false);
     expect(paymentInputSchema.safeParse({ paid_on: "2026-11-01", amount: "5", method: "crypto" }).success).toBe(false);
+  });
+});
+
+describe("professional document file-naming convention", () => {
+  it("sanitizes client company identifiers into clean PascalCase slugs", () => {
+    expect(sanitizeClientCompany("CROSS")).toBe("CROSS");
+    expect(sanitizeClientCompany("Tata Motors")).toBe("TataMotors");
+    expect(sanitizeClientCompany("Tata Motors Pvt. Ltd.")).toBe("TataMotorsPvtLtd");
+    expect(sanitizeClientCompany("Acme Corp & Co.")).toBe("AcmeCorpCo");
+    expect(sanitizeClientCompany("   ")).toBe("");
+    expect(sanitizeClientCompany(null)).toBe("");
+  });
+
+  it("generates quotation filenames matching NAFA-QUO-YY-001-ClientCompany.pdf", () => {
+    const q1 = sampleQuotation({
+      number: "NAFA-QUO-26-001",
+      client: { ...sampleQuotation().client, company: "CROSS" },
+    });
+    expect(pdfFileName(q1)).toBe("NAFA-QUO-26-001-CROSS.pdf");
+
+    const q2 = sampleQuotation({
+      number: "NAFA-QUO-26-002",
+      client: { ...sampleQuotation().client, company: "Tata Motors" },
+    });
+    expect(pdfFileName(q2)).toBe("NAFA-QUO-26-002-TataMotors.pdf");
+  });
+
+  it("generates invoice filenames matching NAFA-INV-YY-001-ClientCompany.pdf", () => {
+    const inv1 = sampleInvoice({
+      number: "NAFA-INV-26-001",
+      client: { ...sampleInvoice().client, company: "CROSS" },
+    });
+    expect(pdfFileName(inv1)).toBe("NAFA-INV-26-001-CROSS.pdf");
+
+    const inv2 = sampleInvoice({
+      number: "NAFA-INV-26-002",
+      client: { ...sampleInvoice().client, company: "Tata Motors" },
+    });
+    expect(pdfFileName(inv2)).toBe("NAFA-INV-26-002-TataMotors.pdf");
+  });
+
+  it("handles revision filenames retaining original number with -V02 suffix", () => {
+    const rev1 = sampleQuotation({
+      number: "NAFA-QUO-26-001-V02",
+      client: { ...sampleQuotation().client, company: "CROSS" },
+    });
+    expect(pdfFileName(rev1)).toBe("NAFA-QUO-26-001-V02-CROSS.pdf");
+
+    const rev2 = sampleQuotation({
+      number: "NAFA-QUO-26-002-V03",
+      client: { ...sampleQuotation().client, company: "Tata Motors" },
+    });
+    expect(pdfFileName(rev2)).toBe("NAFA-QUO-26-002-V03-TataMotors.pdf");
+  });
+
+  it("generates clean draft filenames when unissued", () => {
+    const draftQ = sampleQuotation({
+      number: null,
+      client: { ...sampleQuotation().client, company: "CROSS" },
+    });
+    expect(pdfFileName(draftQ)).toBe("Draft-Quotation-CROSS.pdf");
+
+    const draftInv = sampleInvoice({
+      number: null,
+      client: { ...sampleInvoice().client, company: "Tata Motors" },
+    });
+    expect(pdfFileName(draftInv)).toBe("Draft-Invoice-TataMotors.pdf");
   });
 });

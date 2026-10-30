@@ -96,15 +96,15 @@ export function Pagination({
 export function DataTable({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full min-w-[720px] text-left text-sm">{children}</table>
+      <table className="w-full min-w-[720px] text-left text-sm divide-y divide-border">{children}</table>
     </div>
   );
 }
 export const Th = ({ className, ...p }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
-  <th scope="col" className={cn("whitespace-nowrap border-b border-border bg-surface-muted px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted", className)} {...p} />
+  <th scope="col" className={cn("whitespace-nowrap border-b border-border bg-surface-muted px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted select-none", className)} {...p} />
 );
 export const Td = ({ className, ...p }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-  <td className={cn("border-b border-border px-4 py-3 align-top", className)} {...p} />
+  <td className={cn("border-b border-border px-4 py-3 align-top text-sm text-foreground", className)} {...p} />
 );
 
 export function DetailList({ items }: { items: { label: string; value: React.ReactNode }[] }) {

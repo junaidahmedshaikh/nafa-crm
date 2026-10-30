@@ -4,7 +4,7 @@ import { forwardRef, useId } from "react";
 import { cn } from "@/lib/utils";
 
 const control =
-  "block w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-foreground placeholder:text-muted/70 disabled:bg-surface-muted disabled:text-muted aria-[invalid=true]:border-danger";
+  "block w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-foreground placeholder:text-muted/60 transition-colors focus:border-nav focus:outline-none focus:ring-1 focus:ring-nav disabled:bg-surface-muted disabled:text-muted aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger";
 
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className, ...props }, ref,

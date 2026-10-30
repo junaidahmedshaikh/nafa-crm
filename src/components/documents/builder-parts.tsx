@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useFormContext, useWatch, type UseFormReturn } from "react-hook-form";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, Maximize2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { Field, FormSection, Input, Select, Textarea } from "@/components/ui/form";
 import { calculateDocument, computeMilestones, type CalcConfig, type DiscountSpec } from "@/lib/documents/calc";
 import type { Product, LeadOption } from "@/lib/documents/repo";
@@ -49,7 +50,7 @@ export function useLiveCalc() {
 // ---------------------------------------------------------------------------
 // Client / CRM link
 // ---------------------------------------------------------------------------
-export function ClientSection({ leads, onLead }: { leads: LeadOption[]; onLead?: (lead: LeadOption) => void }) {
+export function ClientSection({ leads, onLead, requireNames }: { leads: LeadOption[]; onLead?: (lead: LeadOption) => void; requireNames?: boolean }) {
   const { register, setValue, control, formState: { errors } } = useCommonForm();
   const leadId = useWatch({ control, name: "lead_id" });
   return (
@@ -83,8 +84,8 @@ export function ClientSection({ leads, onLead }: { leads: LeadOption[]; onLead?:
           </Select>
         )}
       </Field>
-      <Field label="Company" error={errText(errors.client_company)}>{(p) => <Input {...p} {...register("client_company")} />}</Field>
-      <Field label="Contact person" error={errText(errors.client_name)}>{(p) => <Input {...p} {...register("client_name")} />}</Field>
+      <Field label="Company" required={requireNames} error={errText(errors.client_company)}>{(p) => <Input {...p} {...register("client_company")} />}</Field>
+      <Field label="Contact person" required={requireNames} error={errText(errors.client_name)}>{(p) => <Input {...p} {...register("client_name")} />}</Field>
       <Field label="Billing address" className="sm:col-span-2" error={errText(errors.client_address)}>{(p) => <Textarea {...p} {...register("client_address")} rows={2} />}</Field>
       <Field label="Email" error={errText(errors.client_email)}>{(p) => <Input {...p} {...register("client_email")} type="email" />}</Field>
       <Field label="Phone" error={errText(errors.client_phone)}>{(p) => <Input {...p} {...register("client_phone")} inputMode="tel" />}</Field>
@@ -295,8 +296,14 @@ export function SummaryPanel({ milestones }: { milestones?: { kind: "percent" | 
 // ---------------------------------------------------------------------------
 export function PreviewPane({ load, deps }: { load: () => Promise<ActionResult<{ html: string }>>; deps: unknown }) {
   const [state, setState] = useState<{ html?: string; error?: string; loading: boolean }>({ loading: true });
+  const [scale, setScale] = useState(0.5);
+  const [zoomMode, setZoomMode] = useState<"fit" | "full">("fit");
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const loadRef = useRef(load);
-  useEffect(() => { loadRef.current = load; });
+  useEffect(() => {
+    loadRef.current = load;
+  });
   const key = JSON.stringify(deps);
 
   useEffect(() => {
@@ -306,28 +313,163 @@ export function PreviewPane({ load, deps }: { load: () => Promise<ActionResult<{
       const r = await loadRef.current();
       if (live) setState(r.ok ? { html: r.data.html, loading: false } : { error: r.error, loading: false });
     }, 600);
-    return () => { live = false; clearTimeout(t); };
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
   }, [key]);
 
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateScale = () => {
+      if (containerRef.current) {
+        const w = containerRef.current.clientWidth;
+        setScale(Math.max(0.25, Math.min(1.2, w / 794)));
+      }
+    };
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const openNewTab = () => {
+    if (!state.html) return;
+    const blob = new Blob([state.html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  };
+
   return (
-    <div>
-      {state.error && <p role="status" className="mb-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning">{state.error}</p>}
-      <div className="relative overflow-hidden rounded-md border border-border bg-white" style={{ aspectRatio: "210 / 297" }}>
-        {state.html && (
-          <iframe
-            title="Document preview"
-            sandbox=""
-            srcDoc={state.html}
-            className="absolute left-0 top-0 origin-top-left border-0 bg-white"
-            style={{ width: "794px", height: "1123px", transform: "scale(var(--s, .5))" }}
-            ref={(el) => {
-              if (el?.parentElement) el.style.setProperty("--s", String(el.parentElement.clientWidth / 794));
-            }}
-          />
-        )}
-        {state.loading && <div className="absolute inset-0 flex items-center justify-center bg-white/60 text-sm text-muted" role="status">Updating preview…</div>}
+    <div className="space-y-2">
+      {/* Preview Toolbar */}
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2 shadow-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+          <span className="text-xs font-semibold text-foreground">Live PDF Preview</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant={zoomMode === "fit" ? "primary" : "ghost"}
+            className="h-7 px-2 text-xs"
+            onClick={() => setZoomMode("fit")}
+            title="Fit to pane width"
+          >
+            Fit
+          </Button>
+          <Button
+            size="sm"
+            variant={zoomMode === "full" ? "primary" : "ghost"}
+            className="h-7 px-2 text-xs"
+            onClick={() => setZoomMode("full")}
+            title="100% Actual size with scroll"
+          >
+            100%
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-muted hover:text-foreground"
+            onClick={() => setInspectOpen(true)}
+            title="Expand to Fullscreen Dialog"
+            aria-label="Expand preview"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-muted hover:text-foreground"
+            onClick={openNewTab}
+            disabled={!state.html}
+            title="Open preview in new tab"
+            aria-label="Open in new tab"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
-      <p className="mt-1 text-xs text-muted">First page shown. The downloaded PDF uses this exact layout.</p>
+
+      {state.error && (
+        <p role="status" className="rounded-md bg-warning-soft px-3 py-2 text-xs font-medium text-warning border border-warning/20">
+          {state.error}
+        </p>
+      )}
+
+      {/* Preview Container */}
+      <div
+        ref={containerRef}
+        className={cn(
+          "relative overflow-hidden rounded-xl border border-border bg-surface shadow-xs transition-all",
+          zoomMode === "full" ? "h-[650px] overflow-auto" : "",
+        )}
+        style={zoomMode === "fit" ? { aspectRatio: "210 / 297" } : undefined}
+      >
+        {state.html && (
+          <div
+            className="origin-top-left transition-transform duration-150"
+            style={{
+              width: "794px",
+              height: "1123px",
+              transform: zoomMode === "fit" ? `scale(${scale})` : "none",
+            }}
+          >
+            <iframe
+              title="Document preview"
+              srcDoc={state.html}
+              className="h-full w-full border-0 bg-white shadow-sm"
+            />
+          </div>
+        )}
+        {state.loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/75 backdrop-blur-xs text-xs font-medium text-foreground gap-2" role="status">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+            Updating preview…
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between text-[11px] text-muted px-1">
+        <span>First page shown · Uses exact NAFA print layout</span>
+        <button
+          type="button"
+          onClick={() => setInspectOpen(true)}
+          className="text-accent hover:underline font-medium cursor-pointer"
+        >
+          View Full Size &rarr;
+        </button>
+      </div>
+
+      {/* Fullscreen High-Resolution Inspection Modal */}
+      {inspectOpen && (
+        <Modal
+          open={inspectOpen}
+          onClose={() => setInspectOpen(false)}
+          title="Document Preview (Full Resolution)"
+          description="Exact print and PDF rendering. Check layout, alignment, typography and totals."
+          className="max-w-4xl"
+        >
+          <div className="mt-3 flex justify-end gap-2 border-b border-border pb-2.5">
+            <Button size="sm" variant="secondary" onClick={openNewTab}>
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span>Open in New Window</span>
+            </Button>
+          </div>
+          <div className="mt-3 max-h-[75vh] overflow-auto rounded-lg border border-border bg-surface-muted p-4 flex justify-center">
+            {state.html ? (
+              <iframe
+                title="Fullscreen Document preview"
+                srcDoc={state.html}
+                style={{ width: "794px", height: "1123px" }}
+                className="border border-border bg-white shadow-xl rounded-md"
+              />
+            ) : (
+              <p className="text-sm text-muted">Preview not available.</p>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

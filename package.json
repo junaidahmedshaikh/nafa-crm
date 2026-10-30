@@ -18,6 +18,7 @@
     "@fontsource/arimo": "^5.3.0",
     "@fontsource/quattrocento-sans": "^5.3.0",
     "@hookform/resolvers": "^6.0.2",
+    "@sparticuz/chromium": "^147.0.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "class-variance-authority": "^0.7.1",

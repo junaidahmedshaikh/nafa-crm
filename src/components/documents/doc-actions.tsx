@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 type DocType = "quotation" | "invoice" | "proposal";
 type Result = { ok: boolean; error?: string; fieldErrors?: Record<string, string>; code?: string };
 
-const linkBtn = "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border-strong bg-surface px-4 text-sm font-medium hover:bg-surface-muted";
+const linkBtn = "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border-strong bg-surface px-3.5 text-xs font-semibold text-foreground hover:bg-surface-muted shadow-xs transition-colors cursor-pointer";
 
 function useRunner() {
   const router = useRouter();

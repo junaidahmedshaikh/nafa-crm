@@ -10,7 +10,16 @@ import { chromium, type Browser } from "playwright-core";
  */
 let browser: Promise<Browser> | null = null;
 
-function launch(): Promise<Browser> {
+async function launch(): Promise<Browser> {
+  // On Vercel / AWS Lambda there is no system Chromium: use the serverless build bundled by @sparticuz/chromium.
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const sparticuz = (await import("@sparticuz/chromium")).default;
+    return chromium.launch({
+      headless: true,
+      executablePath: await sparticuz.executablePath(),
+      args: sparticuz.args,
+    });
+  }
   return chromium.launch({
     headless: true,
     executablePath: process.env.PDF_CHROMIUM_PATH || undefined,

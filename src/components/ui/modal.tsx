@@ -33,7 +33,7 @@ export function Modal({
         if (e.target === ref.current) onClose();
       }}
       aria-label={title}
-      className={cn("m-auto w-[calc(100%-2rem)] max-w-lg rounded-lg border border-border bg-surface p-0 text-foreground shadow-xl", className)}
+      className={cn("m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-border bg-surface p-0 text-foreground shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-[2px]", className)}
     >
       {open && (
         <div className="p-5">

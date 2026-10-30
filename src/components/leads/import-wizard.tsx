@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import Papa from "papaparse";
-import { AlertCircle, CheckCircle2, Download, FileUp } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, FileUp, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -104,11 +104,36 @@ export function ImportWizard() {
             Status, source, service and priority accept the labels used in the app. Up to {IMPORT_MAX_ROWS} rows per import.
             Existing companies and contacts are reused (matched by name, email or phone) rather than duplicated.
           </p>
-          <label htmlFor="csv" className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-border-strong bg-surface-muted px-4 py-6 hover:border-accent">
-            <FileUp className="h-5 w-5 text-muted" aria-hidden />
-            <span className="text-sm">{parsed ? parsed.fileName : "Click to select a .csv file"}</span>
-            <input id="csv" ref={fileRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
-          </label>
+          {parsed ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent-soft/30 p-3.5">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-accent/30 bg-surface shadow-xs">
+                  <FileSpreadsheet className="h-6 w-6 text-accent" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">{parsed.fileName}</p>
+                  <p className="text-xs text-muted">
+                    {parsed.rows.length} row{parsed.rows.length === 1 ? "" : "s"} detected · {parsed.headers.length} columns
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" variant="ghost" onClick={reset}>
+                <X className="h-4 w-4 mr-1" />
+                <span>Remove</span>
+              </Button>
+            </div>
+          ) : (
+            <label htmlFor="csv" className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-strong bg-surface-muted/60 px-4 py-8 hover:border-accent hover:bg-surface-muted transition-colors text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface border border-border shadow-xs">
+                <FileUp className="h-6 w-6 text-muted" aria-hidden />
+              </div>
+              <div>
+                <span className="text-sm font-semibold text-foreground">Click to select a .csv file</span>
+                <p className="text-xs text-muted mt-0.5">Drag and drop or browse from your computer</p>
+              </div>
+              <input id="csv" ref={fileRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
+            </label>
+          )}
           {problem && (
             <div role="alert" className="flex items-start gap-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />{problem}
