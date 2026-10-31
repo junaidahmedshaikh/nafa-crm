@@ -118,7 +118,7 @@ export async function saveExpense(values: Parameters<typeof expenseInputSchema.p
       }
     }
     const row = {
-      ...e, vendor_id: vendorId, bill_number: e.bill_number, notes: e.notes ?? "", gst_amount: e.gst_amount,
+      ...e, description: e.description ?? "", vendor_id: vendorId, bill_number: e.bill_number, notes: e.notes ?? "", gst_amount: e.gst_amount,
     };
     if (id) {
       const { error } = await supabase.from("expenses").update(row).eq("id", id);

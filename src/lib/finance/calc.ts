@@ -140,3 +140,43 @@ export function expensePaymentStatus(total: number | string, paid: number | stri
   if (dueDate && dueDate < today) return "overdue";
   return d(paid).gt(0) ? "partial" : "pending";
 }
+
+// ---------------------------------------------------------------------------
+// Profit & Loss: expense detail grouped by category
+// ---------------------------------------------------------------------------
+export type CostLine = {
+  source: "expense" | "reimbursement";
+  id: string;
+  date: string;
+  category_id: string;
+  category_name: string;
+  title: string;
+  vendor: string | null;
+  note: string | null;
+  /** GST-exclusive project cost (GST only when it is not recoverable). */
+  amount: number | string;
+  /** Recoverable input GST on this bill: shown for reference, never part of the cost. */
+  gst_recoverable?: number | string;
+};
+export type CostGroup = { category_id: string; category_name: string; total: number; share_pct: number | null; lines: (CostLine & { amount: number })[] };
+
+/** Groups cost lines by category (largest first, lines by date) with exact totals and each category's share of the whole. */
+export function groupCostLines(lines: CostLine[]): { groups: CostGroup[]; total: number } {
+  const byCat = new Map<string, { name: string; sum: Decimal; lines: (CostLine & { amount: number })[] }>();
+  let all = new Decimal(0);
+  for (const l of lines) {
+    const amt = d(l.amount);
+    all = all.plus(amt);
+    const g = byCat.get(l.category_id) ?? { name: l.category_name, sum: new Decimal(0), lines: [] };
+    g.sum = g.sum.plus(amt);
+    g.lines.push({ ...l, amount: r2(amt) });
+    byCat.set(l.category_id, g);
+  }
+  const groups = [...byCat.entries()]
+    .map(([category_id, g]) => ({
+      category_id, category_name: g.name, total: r2(g.sum), share_pct: pct(g.sum, all),
+      lines: g.lines.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)),
+    }))
+    .sort((a, b) => b.total - a.total || a.category_name.localeCompare(b.category_name));
+  return { groups, total: r2(all) };
+}

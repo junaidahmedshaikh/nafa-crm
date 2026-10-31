@@ -73,7 +73,8 @@ export const expenseInputSchema = z.object({
   project_id: z.string().uuid("Choose a project"),
   expense_date: reqDate("Expense date"),
   category_id: z.string().uuid("Choose a category"),
-  description: reqText("Description", 500),
+  title: reqText("Title", 150),
+  description: optText(500), // optional details
   vendor_id: optUuid,
   vendor_name: optText(200), // creates the vendor when it does not exist yet
   bill_number: optText(100),

@@ -71,7 +71,8 @@ export function ExpenseDialog({
               </div>
             )}
           </Field>
-          <Field label="Description" required className="sm:col-span-2" error={errors.description}>{(p) => <Input {...p} name="description" defaultValue={expense?.description} />}</Field>
+          <Field label="Title" required className="sm:col-span-2" hint="A short name shown in the expense list and the Profit &amp; Loss, e.g. “LED wall 12x8”" error={errors.title}>{(p) => <Input {...p} name="title" defaultValue={expense?.title} autoFocus />}</Field>
+          <Field label="Details" className="sm:col-span-2" hint="Optional: what exactly was bought or done" error={errors.description}>{(p) => <Input {...p} name="description" defaultValue={expense?.description} />}</Field>
           <Field label="Vendor / supplier" hint="Pick an existing vendor or type a new name" error={errors.vendor_name}>
             {(p) => <><Input {...p} name="vendor_name" list="vendor-options" defaultValue={vendorName} autoComplete="off" /><datalist id="vendor-options">{vendors.map((v) => <option key={v.id} value={v.name} />)}</datalist></>}
           </Field>
@@ -160,7 +161,7 @@ function PaymentsDialog({ expense, payments, onClose }: { expense: ExpenseRow; p
   const mine = payments.filter((p) => p.expense_id === expense.id);
 
   return (
-    <Modal open onClose={onClose} title={`Payments · ${expense.expense_code}`} description={`${expense.vendor_name ?? "No vendor"} · ${expense.description}`} className="max-w-2xl">
+    <Modal open onClose={onClose} title={`Payments · ${expense.expense_code}`} description={`${expense.vendor_name ?? "No vendor"} · ${expense.title}`} className="max-w-2xl">
       <div className="mb-4 grid grid-cols-3 gap-3 text-sm">
         <div><p className="text-xs text-muted">Bill total</p><p className="font-semibold tabular-nums">{formatINR(expense.total_amount, { exact: true })}</p></div>
         <div><p className="text-xs text-muted">Paid</p><p className="font-semibold tabular-nums">{formatINR(expense.paid_amount, { exact: true })}</p></div>

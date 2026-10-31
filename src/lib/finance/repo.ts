@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAGE_SIZE } from "@/lib/constants";
 import { pageRange, sanitizeSearch } from "@/lib/lead-filters";
-import { aggregateProjects, type SummaryRow } from "./calc";
+import { aggregateProjects, type CostLine, type SummaryRow } from "./calc";
 
 export type FinanceRole = "admin" | "management" | "accounts" | "project_manager" | "operations" | "none";
 export type FinanceAccess = { role: FinanceRole; any: boolean; manage: boolean; admin: boolean; seesRevenue: boolean };
@@ -125,7 +125,7 @@ export async function listLinkableInvoices(supabase: SupabaseClient, companyId: 
 // Expenses
 // ---------------------------------------------------------------------------
 export type ExpenseRow = {
-  id: string; expense_code: string; project_id: string; project_name: string; expense_date: string; category_id: string; category_name: string; description: string;
+  id: string; expense_code: string; project_id: string; project_name: string; expense_date: string; category_id: string; category_name: string; title: string; description: string;
   vendor_id: string | null; vendor_name: string | null; bill_number: string | null; qty: number | string; unit: string; rate: number | string; subtotal: number | string;
   gst_amount: number | string; gst_recoverable: boolean; total_amount: number | string; estimated_amount: number | string | null; due_date: string | null;
   approval_status: "submitted" | "approved" | "rejected"; notes: string; created_by: string | null; paid_amount: number | string; outstanding_amount: number | string;
@@ -143,7 +143,7 @@ export async function listExpenses(supabase: SupabaseClient, projectId: string, 
   let q = supabase.from("expense_list").select("*", { count: "exact" }).eq("project_id", projectId);
   q = f.deleted ? q.not("deleted_at", "is", null) : q.is("deleted_at", null);
   const s = sanitizeSearch(f.q);
-  if (s) q = q.or(`description.ilike.%${s}%,vendor_name.ilike.%${s}%,bill_number.ilike.%${s}%,expense_code.ilike.%${s}%`);
+  if (s) q = q.or(`title.ilike.%${s}%,description.ilike.%${s}%,vendor_name.ilike.%${s}%,bill_number.ilike.%${s}%,expense_code.ilike.%${s}%`);
   if (isUuid(f.category)) q = q.eq("category_id", f.category);
   if (isUuid(f.vendor)) q = q.eq("vendor_id", f.vendor);
   if (["pending", "partial", "paid", "overdue"].includes(f.status)) q = q.eq("payment_status", f.status);
@@ -247,4 +247,32 @@ export async function listProjectAudit(supabase: SupabaseClient, projectId: stri
 export async function getCategoryTotals(supabase: SupabaseClient, projectId: string): Promise<CategoryPoint[]> {
   const { data } = await supabase.rpc("finance_category_totals", { p_from: null, p_to: null, p_project: projectId });
   return ((data ?? []) as { category_id: string; category_name: string; amount: number | string }[]).map((c) => ({ ...c, amount: Number(c.amount) }));
+}
+
+/** Every cost that makes up the project's expenses in the P&L: approved expenses, plus approved reimbursements not already entered as an expense. */
+export async function getCostDetail(supabase: SupabaseClient, projectId: string): Promise<CostLine[]> {
+  if (!isUuid(projectId)) return [];
+  const [exp, reimb] = await Promise.all([
+    supabase.from("expense_list")
+      .select("id, expense_date, category_id, category_name, title, description, vendor_name, bill_number, cost_amount, gst_amount, gst_recoverable")
+      .eq("project_id", projectId).is("deleted_at", null).eq("approval_status", "approved").order("expense_date").limit(2000),
+    supabase.from("reimbursements")
+      .select("id, expense_date, category_id, person_name, description, amount, category:expense_categories(name)")
+      .eq("project_id", projectId).is("deleted_at", null).in("status", ["approved", "reimbursed"]).is("expense_id", null).limit(1000),
+  ]);
+  const lines: CostLine[] = [];
+  for (const e of (exp.data ?? []) as {
+    id: string; expense_date: string; category_id: string; category_name: string; title: string; description: string; vendor_name: string | null;
+    bill_number: string | null; cost_amount: number | string; gst_amount: number | string; gst_recoverable: boolean;
+  }[]) {
+    lines.push({
+      source: "expense", id: e.id, date: e.expense_date, category_id: e.category_id, category_name: e.category_name, title: e.title, vendor: e.vendor_name,
+      note: [e.bill_number ? `Bill ${e.bill_number}` : "", e.description].filter(Boolean).join(" · ") || null, amount: e.cost_amount,
+      gst_recoverable: e.gst_recoverable ? e.gst_amount : 0,
+    });
+  }
+  for (const r of (reimb.data ?? []) as unknown as { id: string; expense_date: string; category_id: string; person_name: string; description: string; amount: number | string; category: { name: string } | null }[]) {
+    lines.push({ source: "reimbursement", id: r.id, date: r.expense_date, category_id: r.category_id, category_name: r.category?.name ?? "Other", title: r.description, vendor: r.person_name, note: "Reimbursement", amount: r.amount });
+  }
+  return lines;
 }

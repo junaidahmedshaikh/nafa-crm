@@ -4,6 +4,7 @@ import { Receipt } from "lucide-react";
 import { BarChart, CHART_COLORS, Legend, PieChart } from "@/components/finance/charts";
 import { NoFinanceAccess, Profit, ProjectStatusBadge, StatCard, pctText } from "@/components/finance/bits";
 import { AddExpenseButton, ExpenseRowActions, ExpenseStatusCell } from "@/components/finance/expense-dialogs";
+import { PnlExpenseDetail } from "@/components/finance/pnl-detail";
 import { BudgetEditor, DeleteRestoreButton, ReimbursementForm, ReimbursementTable, RevenuePanel } from "@/components/finance/panels";
 import { FilterForm } from "@/components/shared/filter-form";
 import { Button, LinkButton } from "@/components/ui/button";
@@ -11,9 +12,9 @@ import { Input, Select } from "@/components/ui/form";
 import { Card, CardHeader, DataTable, DetailList, EmptyState, PageHeader, Pagination, Td, Th } from "@/components/ui/layout";
 import { requireMember } from "@/lib/auth";
 import { formatDate, formatDateTime } from "@/lib/datetime";
-import { profitAndLoss } from "@/lib/finance/calc";
+import { groupCostLines, profitAndLoss, type CostLine } from "@/lib/finance/calc";
 import {
-  getBudgetStatus, getCategoryTotals, getFinanceAccess, getProject, getRevenueDetail, listCategories, listExpensePayments, listExpenses, listLinkableInvoices,
+  getBudgetStatus, getCategoryTotals, getCostDetail, getFinanceAccess, getProject, getRevenueDetail, listCategories, listExpensePayments, listExpenses, listLinkableInvoices,
   listPeople, listProjectAudit, listReimbursements, listVendors, projectCode, type ExpenseFilters,
 } from "@/lib/finance/repo";
 import { formatINR } from "@/lib/format";
@@ -68,7 +69,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         ))}
       </nav>
 
-      {tab === "overview" && <Overview project={project} pl={pl} summary={summary} seesRevenue={access.seesRevenue} categoriesPromise={access.seesRevenue ? getCategoryTotals(supabase, id) : Promise.resolve([])} />}
+      {tab === "overview" && <Overview project={project} pl={pl} summary={summary} seesRevenue={access.seesRevenue} categoriesPromise={access.seesRevenue ? getCategoryTotals(supabase, id) : Promise.resolve([])} costPromise={access.seesRevenue ? getCostDetail(supabase, id) : Promise.resolve([])} budgetPromise={access.seesRevenue ? getBudgetStatus(supabase, id) : Promise.resolve([])} />}
 
       {tab === "expenses" && <ExpensesTab id={id} sp={sp} supabase={supabase} userId={user.id} access={access} categories={categories} vendors={vendors} />}
 
@@ -86,11 +87,13 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
 type Sb = Awaited<ReturnType<typeof requireMember>>["supabase"];
 
 // ---------------------------------------------------------------------------
-async function Overview({ project, pl, summary, seesRevenue, categoriesPromise }: {
+async function Overview({ project, pl, summary, seesRevenue, categoriesPromise, costPromise, budgetPromise }: {
   project: NonNullable<Awaited<ReturnType<typeof getProject>>>["project"]; pl: ReturnType<typeof profitAndLoss> | null; summary: NonNullable<Awaited<ReturnType<typeof getProject>>>["summary"]; seesRevenue: boolean;
-  categoriesPromise: ReturnType<typeof getCategoryTotals>;
+  categoriesPromise: ReturnType<typeof getCategoryTotals>; costPromise: Promise<CostLine[]>; budgetPromise: ReturnType<typeof getBudgetStatus>;
 }) {
-  const cats = await categoriesPromise;
+  const [cats, costLines, budgets] = await Promise.all([categoriesPromise, costPromise, budgetPromise]);
+  const detail = groupCostLines(costLines);
+  const budgetBy = new Map(budgets.map((b) => [b.category_id, Number(b.budget)]));
   return (
     <div className="space-y-4">
       <Card>
@@ -153,6 +156,8 @@ async function Overview({ project, pl, summary, seesRevenue, categoriesPromise }
               </div>
             </Card>
           </div>
+
+          <PnlExpenseDetail groups={detail.groups} total={detail.total} itemCount={costLines.length} budgetBy={budgetBy} />
         </>
       )}
     </div>
@@ -198,13 +203,13 @@ async function ExpensesTab({ id, sp, supabase, userId, access, categories, vendo
       ) : (
         <>
           <DataTable className="min-w-[960px]">
-            <thead><tr><Th>{sortLink("date", "Date")}</Th><Th>{sortLink("category", "Category")}</Th><Th>Description</Th><Th>Vendor</Th><Th className="text-right">Estimated</Th><Th className="text-right">{sortLink("amount", "Actual")}</Th><Th className="text-right">Paid</Th><Th className="text-right">Outstanding</Th><Th>Status</Th><Th><span className="sr-only">Actions</span></Th></tr></thead>
+            <thead><tr><Th>{sortLink("date", "Date")}</Th><Th>{sortLink("category", "Category")}</Th><Th>Title</Th><Th>Vendor</Th><Th className="text-right">Estimated</Th><Th className="text-right">{sortLink("amount", "Actual")}</Th><Th className="text-right">Paid</Th><Th className="text-right">Outstanding</Th><Th>Status</Th><Th><span className="sr-only">Actions</span></Th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="hover:bg-surface-muted">
                   <Td className="whitespace-nowrap">{formatDate(r.expense_date)}<p className="text-xs text-muted">{r.expense_code}</p></Td>
                   <Td>{r.category_name}</Td>
-                  <Td className="max-w-xs"><p className="truncate font-medium" title={r.description}>{r.description}</p>{r.bill_number && <p className="text-xs text-muted">Bill {r.bill_number}</p>}</Td>
+                  <Td className="max-w-xs"><p className="truncate font-medium" title={r.title}>{r.title}</p>{r.description && <p className="truncate text-xs text-muted" title={r.description}>{r.description}</p>}{r.bill_number && <p className="text-xs text-muted">Bill {r.bill_number}</p>}</Td>
                   <Td>{r.vendor_name ?? "—"}</Td>
                   <Td className="text-right tabular-nums">{r.estimated_amount == null ? "—" : formatINR(r.estimated_amount, { exact: true })}</Td>
                   <Td className={`text-right tabular-nums ${r.estimated_amount != null && Number(r.subtotal) > Number(r.estimated_amount) ? "text-danger" : ""}`}>{formatINR(r.total_amount, { exact: true })}{Number(r.gst_amount) > 0 && <p className="text-xs text-muted">incl. GST {formatINR(r.gst_amount, { exact: true })}{r.gst_recoverable ? " (recoverable)" : ""}</p>}</Td>
@@ -270,7 +275,7 @@ async function ActivityTab({ id, supabase }: { id: string; supabase: Sb }) {
           <tbody>
             {audit.map((a) => {
               const row = (a.new_row ?? a.old_row ?? {}) as Record<string, unknown>;
-              const label = (row.description ?? row.name ?? row.person_name ?? "") as string;
+              const label = (row.title ?? row.description ?? row.name ?? row.person_name ?? "") as string;
               return (
                 <tr key={a.id}>
                   <Td className="whitespace-nowrap">{formatDateTime(a.at)}</Td><Td>{a.actor ? name[a.actor] ?? "Team member" : "System"}</Td>
