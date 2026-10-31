@@ -26,10 +26,11 @@ const linkBtn = "inline-flex h-9 items-center justify-center gap-2 whitespace-no
 function useRunner() {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const run = (fn: () => Promise<Result>, ok: string, after?: () => void) =>
+  // refresh=false for actions that navigate away (e.g. deleting a draft): refreshing would re-render a page whose record no longer exists.
+  const run = (fn: () => Promise<Result>, ok: string, after?: () => void, refresh = true) =>
     startTransition(async () => {
       const r = await fn();
-      if (r.ok) { toast.success(ok); after?.(); router.refresh(); } else toast.error(r.error ?? "Something went wrong");
+      if (r.ok) { toast.success(ok); after?.(); if (refresh) router.refresh(); } else toast.error(r.error ?? "Something went wrong");
     });
   return { router, pending, run, startTransition };
 }
@@ -135,7 +136,7 @@ export function QuotationActions({ id, status, effectiveStatus, invoiceCount, em
         title="Issue this quotation?" description="It will receive the next quotation number, be marked as sent, and be locked — issued quotations cannot be edited (you can create a revision instead). A snapshot of the rates, fees and tax settings is saved."
         onConfirm={() => run(() => issueQuotation(id), "Quotation issued", close)} />
       <ConfirmDialog open={dlg === "delete"} onClose={close} pending={pending} confirmLabel="Delete draft" title="Delete this draft?" description="Drafts have no number and can be deleted. This cannot be undone."
-        onConfirm={() => run(async () => { const r = await deleteDraft("quotation", id); if (r.ok) router.push("/quotations"); return r; }, "Draft deleted", close)} />
+        onConfirm={() => run(async () => { const r = await deleteDraft("quotation", id); if (r.ok) router.replace("/quotations"); return r; }, "Draft deleted", close, false)} />
       <ConfirmDialog open={dlg === "reject"} onClose={close} pending={pending} confirmLabel="Mark rejected" title="Mark as rejected?" description="Use this when the client has declined. A rejected quotation cannot be converted to an invoice."
         onConfirm={() => run(() => setQuotationStatus(id, "rejected"), "Marked as rejected", close)} />
       <ConfirmDialog open={dlg === "convert"} onClose={close} pending={pending} destructive={false} confirmLabel="Create invoice draft"
@@ -203,7 +204,7 @@ export function InvoiceActions({ id, state, balance, email }: { id: string; stat
         description="It will receive the next invoice number and be locked. Issued invoices cannot be edited — to amend one you cancel it (with a reason) and create a corrected draft. Rates, tax settings and bank details are saved as a snapshot."
         onConfirm={() => run(() => issueInvoice(id), "Invoice issued", close)} />
       <ConfirmDialog open={dlg === "delete"} onClose={close} pending={pending} confirmLabel="Delete draft" title="Delete this draft?" description="Drafts have no number and can be deleted. This cannot be undone."
-        onConfirm={() => run(async () => { const r = await deleteDraft("invoice", id); if (r.ok) router.push("/invoices"); return r; }, "Draft deleted", close)} />
+        onConfirm={() => run(async () => { const r = await deleteDraft("invoice", id); if (r.ok) router.replace("/invoices"); return r; }, "Draft deleted", close, false)} />
 
       <Modal open={dlg === "cancel"} onClose={close} title="Cancel this invoice" description="The invoice number is never reused. Cancelling is only possible when no payments are recorded (void them first).">
         <form className="space-y-4" onSubmit={submitForm((f) => cancelInvoice(id, f.reason), "Invoice cancelled")}>
@@ -297,7 +298,7 @@ export function ProposalActions({ id, status, email }: { id: string; status: str
         description="It will receive the next proposal number, be marked as sent and be locked. Create a revision to change it later."
         onConfirm={() => run(() => issueProposal(id), "Proposal issued", close)} />
       <ConfirmDialog open={dlg === "delete"} onClose={close} pending={pending} confirmLabel="Delete draft" title="Delete this draft?" description="Drafts can be deleted. This cannot be undone."
-        onConfirm={() => run(async () => { const r = await deleteDraft("proposal", id); if (r.ok) router.push("/proposals"); return r; }, "Draft deleted", close)} />
+        onConfirm={() => run(async () => { const r = await deleteDraft("proposal", id); if (r.ok) router.replace("/proposals"); return r; }, "Draft deleted", close, false)} />
       {email.number && <EmailDialog type="proposal" id={id} number={email.number} defaultTo={email.clientEmail} defaultSubject={em.subject} defaultMessage={em.message} enabled={email.emailEnabled} open={dlg === "email"} onClose={close} />}
     </>
   );
