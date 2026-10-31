@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -10,7 +10,12 @@ export const metadata: Metadata = {
   title: { default: "NAFA Business OS", template: "%s · NAFA Business OS" },
   description: "Private internal CRM for NAFA Events & Activations.",
   robots: { index: false, follow: false },
+  applicationName: "NAFA CRM",
+  appleWebApp: { capable: true, title: "NAFA CRM", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
+
+export const viewport: Viewport = { themeColor: "#121214" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

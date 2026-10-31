@@ -245,3 +245,72 @@ It renders both PDFs at 150 dpi, writes a side-by-side image and a red/cyan over
 * Tax treatment and place of supply are chosen by the user and never inferred; no GST-return or e-invoice (IRN) integration.
 * Email: Resend only; no bounce/delivery webhooks, so a message is recorded as “sent” when the provider accepts it, not when it is delivered.
 * PDF generation needs a Chromium-capable host (see above) and takes roughly 1–2 s per document.
+
+---
+
+## Project Budget & Profit Management
+
+Per-project budgets, expenses, vendor payments, reimbursements and profit. Routes: `/finance` (dashboard), `/projects`, `/projects/[id]`, `/finance/vendors`, `/finance/reimbursements`.
+
+### Setup
+
+1. Run `supabase/migrations/20261031000001_project_finance.sql` in the Supabase SQL editor (fresh projects: `supabase/setup-all.sql` already includes it).
+2. **Grant finance access.** Existing team members get **no** access to financial data by default. Administrators (`profiles.role = 'admin'`) always have full access. For everyone else set a finance role:
+
+```sql
+update public.profiles set finance_role = 'accounts'   -- none | operations | project_manager | accounts | management
+where id = (select id from auth.users where email = 'person@example.com');
+```
+
+| Role | Can do |
+|---|---|
+| admin (Super Admin) | everything, including restoring deleted records and reading the audit log |
+| management | everything except restoring deleted records; reads the audit log |
+| accounts | create/edit projects, expenses, payments, budgets, reimbursements; approve; soft-delete |
+| project_manager | on **assigned** projects only: see budget and expenses, add expenses (need approval). Never sees revenue or profit |
+| operations | on **assigned** projects only: submit expenses and reimbursements for themselves |
+
+"Assigned" means ticked under *Team access* on the project.
+
+### How the money is counted
+* Revenue and cost are **GST-exclusive**. GST collected and recoverable input GST are shown separately and never enter profit. GST on a bill counts as a cost only if you untick "recoverable".
+* Revenue = approved project value + approved additional charges + approved change orders.
+* Cost = approved, non-deleted expenses + approved/reimbursed reimbursements that are **not linked to an expense** (so nothing is counted twice).
+* Expenses entered by project managers/operations are *submitted* and do not count (and cannot be paid) until accounts approve them.
+* Client payments are not duplicated: link an issued invoice to a project and its payments are read from the existing invoice payments.
+* Payments are never deleted, only voided; an identical payment (same bill, date, amount, reference) is rejected as a duplicate; payments cannot exceed the bill.
+* Deleting is a soft delete (kept in the audit log); only an administrator can restore.
+* Dashboard period: a project belongs to the period of its **start date** (created date if none). "This year" is the Indian financial year (Apr–Mar). Weeks start on Monday.
+
+### Not built yet
+Excel import of expenses; PDF/Excel/CSV report exports; bill/receipt file attachments (needs a Supabase Storage bucket and policies); email/push notifications for budget alerts (alerts currently show on the dashboard and project budget tab); a screen for assigning finance roles (use the SQL above); a vendor edit screen (vendors are created from the expense form).
+
+---
+
+## App installation tracking (PWA)
+
+The CRM is an installable web app (manifest, icons, service worker). When someone installs it or opens it from their home screen, an alert appears in the notification bell of every administrator (plus anyone chosen in the preferences).
+
+### Setup
+1. Run `supabase/migrations/20261101000001_app_installs.sql` in the Supabase SQL editor (fresh projects: `setup-all.sql` already includes it).
+2. Optional email alerts: set `RESEND_API_KEY` and `EMAIL_FROM` (same variables as quotation emails), then tick *Also send an email* and add addresses under **Settings → App installations**.
+3. Live bell updates use Supabase Realtime. The migration adds the `notifications` table to the `supabase_realtime` publication; without it the bell still refreshes every minute.
+
+### How installs are detected
+| Platform | Detection |
+|---|---|
+| Android / desktop Chrome and Edge | the browser `appinstalled` event, then the first launch in standalone mode |
+| iPhone / iPad | no install event exists, so the **first launch in standalone (home-screen) mode** is treated as the install |
+| Any browser tab | never counted |
+
+Each browser gets a random device id (stored in `localStorage`); one row per user and device, so one person can have several devices and an alert is raised once per device. Only platform family, browser name and timestamps are stored: no contacts, files, location, IP address or user-agent string.
+
+### Where to look
+* **Settings → App installations** (administrators only): totals, Android / iOS / desktop counts, installs today, filters by period, user, device and status, device-wise records, user-wise history, and notification preferences.
+* **Settings** (everyone): an *Install app* button, or Add-to-Home-Screen steps on iPhone/iPad.
+
+### Limits
+* Clearing site data creates a new device id, so that device can be counted again.
+* Uninstalling cannot be detected by any browser, so there is no "uninstalled" status.
+* Web push notifications are not built. In-app (live) and email alerts are.
+* "Assigned team administrator" has no equivalent in this CRM (there are no teams); pick extra recipients individually instead.

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BusinessSettingsForm, ProfileForm } from "@/components/settings/settings-forms";
+import { InstallCard } from "@/components/pwa/install-card";
 import { PageHeader } from "@/components/ui/layout";
 import { getSettings, requireMember } from "@/lib/auth";
 
@@ -13,6 +14,10 @@ export default async function SettingsPage() {
       <PageHeader title="Settings" description="Business details, follow-up defaults and your profile. Credentials and integration secrets are never stored here — they live in server environment variables." />
       <div className="max-w-3xl space-y-8">
         <Link href="/settings/documents" className="block rounded-lg border border-border bg-surface p-4 hover:bg-surface-muted"><p className="text-sm font-semibold">Document settings →</p><p className="text-xs text-muted">Bank details, tax defaults, terms and numbering for quotations, proposals and invoices.</p></Link>
+        <InstallCard />
+        {profile.role === "admin" && (
+          <Link href="/settings/app-installs" className="block rounded-lg border border-border bg-surface p-4 hover:bg-surface-muted"><p className="text-sm font-semibold">App installations →</p><p className="text-xs text-muted">Who installed the CRM app, on which device, plus alert preferences.</p></Link>
+        )}
         <BusinessSettingsForm
           canEdit={profile.role === "admin"}
           defaults={{

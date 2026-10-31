@@ -22,8 +22,13 @@ import {
   UserRound,
   Wallet,
   X,
+  FolderKanban,
+  HandCoins,
+  Store,
+  TrendingUp,
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +46,11 @@ const NAV: NavItem[] = [
   { href: "/quotations", label: "Quotations", icon: FileText },
   { href: "/proposals", label: "Proposals", icon: Presentation },
   { href: "/invoices", label: "Invoices", icon: ReceiptText },
+  { section: "Project Finance" },
+  { href: "/finance", label: "Finance Dashboard", icon: TrendingUp },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/finance/vendors", label: "Vendor Payments", icon: Store },
+  { href: "/finance/reimbursements", label: "Reimbursements", icon: HandCoins },
   { section: "Operations" },
   { href: "/products-services", label: "Products & Services", icon: Package },
   { href: "/payments", label: "Payments", icon: Wallet },
@@ -127,14 +137,20 @@ const ROUTE_LABELS: Record<string, string> = {
   "/invoices": "Invoices",
   "/invoices/new": "New Invoice",
   "/payments": "Payments",
+  "/finance": "Finance Dashboard",
+  "/finance/vendors": "Vendor Payments",
+  "/finance/reimbursements": "Reimbursements",
+  "/projects": "Projects",
+  "/projects/new": "New Project",
   "/products-services": "Products & Services",
   "/settings": "Settings",
   "/settings/documents": "Document Settings",
+  "/settings/app-installs": "App Installations",
 };
 
 function Breadcrumb() {
   const pathname = usePathname();
-  const current = ROUTE_LABELS[pathname] || (pathname.includes("/quotations/") ? "Quotation Details" : pathname.includes("/invoices/") ? "Invoice Details" : pathname.includes("/proposals/") ? "Proposal Details" : pathname.includes("/leads/") ? "Lead Details" : pathname.includes("/companies/") ? "Company Details" : pathname.includes("/contacts/") ? "Contact Details" : "NAFA Business OS");
+  const current = ROUTE_LABELS[pathname] || (pathname.startsWith("/projects/") ? "Project" : pathname.includes("/quotations/") ? "Quotation Details" : pathname.includes("/invoices/") ? "Invoice Details" : pathname.includes("/proposals/") ? "Proposal Details" : pathname.includes("/leads/") ? "Lead Details" : pathname.includes("/companies/") ? "Company Details" : pathname.includes("/contacts/") ? "Contact Details" : "NAFA Business OS");
   return (
     <div className="flex items-center gap-2 text-xs text-muted font-medium">
       <span className="hidden sm:inline text-muted/70">NAFA</span>
@@ -145,11 +161,13 @@ function Breadcrumb() {
 }
 
 export function AppShell({
-  userName, userEmail, businessName, children,
+  userName, userEmail, businessName, userId, isAdmin, children,
 }: {
   userName: string;
   userEmail: string;
   businessName: string;
+  userId: string;
+  isAdmin: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -244,6 +262,7 @@ export function AppShell({
           </div>
 
           <div className="flex items-center gap-2.5">
+            <NotificationBell userId={userId} isAdmin={isAdmin} />
             {/* Quick Action Dropdown */}
             <div className="relative" ref={createRef}>
               <button

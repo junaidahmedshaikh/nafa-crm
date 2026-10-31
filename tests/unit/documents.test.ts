@@ -57,15 +57,17 @@ describe("GST declaration (conditional, never contradicting the tax calculation)
 });
 
 describe("invoice template", () => {
+  // Embedded fonts and the logo are base64 data URIs, which can contain any letter sequence by chance; assert on the visible markup only.
+  const visible = (html: string) => html.replace(/url\(data:[^)]*\)/g, "").replace(/src="data:[^"]*"/g, "");
   it("shows CGST/SGST or IGST rows only for the selected tax treatment, no zero-value tax rows otherwise", () => {
-    const split = renderInvoiceHtml(inv(cfg({ tax: { mode: "cgst_sgst", rate: 18 } })));
+    const split = visible(renderInvoiceHtml(inv(cfg({ tax: { mode: "cgst_sgst", rate: 18 } }))));
     expect(split).toContain("CGST 9%");
     expect(split).toContain("SGST 9%");
     expect(split).not.toContain("IGST");
-    const igst = renderInvoiceHtml(inv(cfg({ tax: { mode: "igst", rate: 18 } })));
+    const igst = visible(renderInvoiceHtml(inv(cfg({ tax: { mode: "igst", rate: 18 } }))));
     expect(igst).toContain("IGST 18%");
     expect(igst).not.toContain("CGST");
-    const none = renderInvoiceHtml(inv(cfg()));
+    const none = visible(renderInvoiceHtml(inv(cfg())));
     expect(none).not.toMatch(/CGST|SGST|IGST/);
   });
   it("prints amount in words, received/balance and the payment status", () => {

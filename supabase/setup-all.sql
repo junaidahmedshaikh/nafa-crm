@@ -1,4 +1,4 @@
--- NAFA Business OS: ALL migrations (Phase 1 + Phase 2) combined, for ONE-paste setup of a FRESH Supabase project.
+-- NAFA Business OS: ALL migrations (Phase 1 + 2 + Project Finance + App installs) combined, for ONE-paste setup of a FRESH Supabase project.
 -- Already ran Phase 1? Do NOT run this. Run only migrations/20261029000001_documents.sql instead.
 
 -- ===== migrations/20261028000001_schema.sql =====
@@ -561,7 +561,7 @@ create table public.document_sequences (
   updated_at   timestamptz not null default now()
 );
 insert into public.document_sequences (doc_type, prefix) values
-  ('quotation', 'NAFA-QUO-26-'), ('proposal', 'NAFA-PROP-26-'), ('invoice', 'NAFA-INV-26-');
+  ('quotation', 'NAFA-Q-'), ('proposal', 'NAFA-P-'), ('invoice', 'NAFA-INV-');
 
 -- A counter can be re-prefixed or advanced, but never wound back (numbers are never reused).
 create function public.document_sequences_guard() returns trigger language plpgsql as $$
@@ -578,10 +578,7 @@ create trigger document_sequences_guard before update on public.document_sequenc
 /** Atomically allocates the next number. The UPDATE takes a row lock, so concurrent callers queue up. */
 create function public.next_document_number(p_type public.document_type) returns text
 language plpgsql security definer set search_path = '' as $$
-declare
-  s record;
-  v_prefix text;
-  v_yy text;
+declare s record;
 begin
   if not public.is_team_member() then
     raise exception 'NOT_AUTHORISED' using errcode = '42501';
@@ -590,10 +587,7 @@ begin
      set next_number = next_number + 1
    where doc_type = p_type
   returning prefix, padding, next_number - 1 as n into s;
-
-  v_yy := to_char(now() at time zone 'Asia/Kolkata', 'YY');
-  v_prefix := replace(s.prefix, '{YY}', v_yy);
-  return v_prefix || lpad(s.n::text, s.padding, '0');
+  return s.prefix || lpad(s.n::text, s.padding, '0');
 end $$;
 revoke all on function public.next_document_number(public.document_type) from public, anon, authenticated;
 
@@ -1274,62 +1268,20 @@ declare
   v_number text;
   v_updated timestamptz;
   v_status text;
-  v_revision_of uuid;
-  v_parent_number text;
-  v_base_number text;
-  v_next_version int;
 begin
   if not public.is_team_member() then raise exception 'NOT_AUTHORISED' using errcode = '42501'; end if;
   if p_type = 'quotation' then
-    select status::text, updated_at, revision_of into v_status, v_updated, v_revision_of from public.quotations where id = p_id for update;
+    select status::text, updated_at into v_status, v_updated from public.quotations where id = p_id for update;
   elsif p_type = 'invoice' then
     select state::text, updated_at into v_status, v_updated from public.invoices where id = p_id for update;
   else
-    select status::text, updated_at, revision_of into v_status, v_updated, v_revision_of from public.proposals where id = p_id for update;
+    select status::text, updated_at into v_status, v_updated from public.proposals where id = p_id for update;
   end if;
   if v_status is null then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
   if v_status <> 'draft' then raise exception 'ALREADY_ISSUED' using errcode = '23514'; end if;
   if v_updated is distinct from p_expected_updated_at then raise exception 'STALE: the draft changed while issuing; reload and try again' using errcode = '40001'; end if;
 
-  -- Revision numbering: retain parent base number and append -V02, -V03 without consuming a new sequence counter
-  if v_revision_of is not null then
-    if p_type = 'quotation' then
-      select number into v_parent_number from public.quotations where id = v_revision_of;
-      if v_parent_number is not null then
-        v_base_number := regexp_replace(v_parent_number, '-V[0-9]+$', '');
-        select coalesce(max(
-          nullif(substring(number from '-V([0-9]+)$'), '')::int
-        ), 1) + 1
-        into v_next_version
-        from public.quotations
-        where number = v_base_number or number ~ ('^' || v_base_number || '-V[0-9]+$');
-
-        v_number := v_base_number || '-V' || lpad(v_next_version::text, 2, '0');
-      else
-        v_number := public.next_document_number(p_type);
-      end if;
-    elsif p_type = 'proposal' then
-      select number into v_parent_number from public.proposals where id = v_revision_of;
-      if v_parent_number is not null then
-        v_base_number := regexp_replace(v_parent_number, '-V[0-9]+$', '');
-        select coalesce(max(
-          nullif(substring(number from '-V([0-9]+)$'), '')::int
-        ), 1) + 1
-        into v_next_version
-        from public.proposals
-        where number = v_base_number or number ~ ('^' || v_base_number || '-V[0-9]+$');
-
-        v_number := v_base_number || '-V' || lpad(v_next_version::text, 2, '0');
-      else
-        v_number := public.next_document_number(p_type);
-      end if;
-    else
-      v_number := public.next_document_number(p_type);
-    end if;
-  else
-    v_number := public.next_document_number(p_type);
-  end if;
-
+  v_number := public.next_document_number(p_type);
   perform set_config('nafa.issuing', '1', true);
   if p_type = 'quotation' then
     update public.quotations set number = v_number, status = 'sent', issued_at = now(), sent_at = now(),
@@ -1496,3 +1448,844 @@ join public.invoices i on i.id = pay.invoice_id;
 
 revoke all on public.quotation_list, public.invoice_list, public.proposal_list, public.payment_list from anon;
 grant select on public.quotation_list, public.invoice_list, public.proposal_list, public.payment_list to authenticated;
+
+-- ===== migrations/20261030000001_naming_convention.sql =====
+-- Migration: 20261030000001_naming_convention.sql
+-- Description: Implement NAFA Events professional document numbering and file naming convention:
+--   Quotation: NAFA-QUO-YY-001 (revisions: NAFA-QUO-YY-001-V02)
+--   Invoice:   NAFA-INV-YY-001
+--   Proposal:  NAFA-PROP-YY-001
+
+-- 1. Update sequence prefixes in document_sequences
+update public.document_sequences set prefix = 'NAFA-QUO-26-' where doc_type = 'quotation';
+update public.document_sequences set prefix = 'NAFA-INV-26-' where doc_type = 'invoice';
+update public.document_sequences set prefix = 'NAFA-PROP-26-' where doc_type = 'proposal';
+
+-- 2. Enhance next_document_number to dynamically evaluate {YY} token if present
+create or replace function public.next_document_number(p_type public.document_type) returns text
+language plpgsql security definer set search_path = '' as $$
+declare
+  s record;
+  v_prefix text;
+  v_yy text;
+begin
+  if not public.is_team_member() then
+    raise exception 'NOT_AUTHORISED' using errcode = '42501';
+  end if;
+  update public.document_sequences
+     set next_number = next_number + 1
+   where doc_type = p_type
+  returning prefix, padding, next_number - 1 as n into s;
+  
+  v_yy := to_char(now() at time zone 'Asia/Kolkata', 'YY');
+  v_prefix := replace(s.prefix, '{YY}', v_yy);
+  return v_prefix || lpad(s.n::text, s.padding, '0');
+end $$;
+revoke all on function public.next_document_number(public.document_type) from public, anon, authenticated;
+
+-- 3. Enhance issue_document to retain original number with -V02 suffix for revisions
+create or replace function public.issue_document(p_type public.document_type, p_id uuid, p_snapshot jsonb, p_expected_updated_at timestamptz)
+returns text language plpgsql security definer set search_path = '' as $$
+declare
+  v_number text;
+  v_updated timestamptz;
+  v_status text;
+  v_revision_of uuid;
+  v_parent_number text;
+  v_base_number text;
+  v_next_version int;
+begin
+  if not public.is_team_member() then raise exception 'NOT_AUTHORISED' using errcode = '42501'; end if;
+  if p_type = 'quotation' then
+    select status::text, updated_at, revision_of into v_status, v_updated, v_revision_of from public.quotations where id = p_id for update;
+  elsif p_type = 'invoice' then
+    select state::text, updated_at into v_status, v_updated from public.invoices where id = p_id for update;
+  else
+    select status::text, updated_at, revision_of into v_status, v_updated, v_revision_of from public.proposals where id = p_id for update;
+  end if;
+  if v_status is null then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
+  if v_status <> 'draft' then raise exception 'ALREADY_ISSUED' using errcode = '23514'; end if;
+  if v_updated is distinct from p_expected_updated_at then raise exception 'STALE: the draft changed while issuing; reload and try again' using errcode = '40001'; end if;
+
+  -- Revision numbering: retain parent base number and append -V02, -V03 without consuming a new sequence counter
+  if v_revision_of is not null then
+    if p_type = 'quotation' then
+      select number into v_parent_number from public.quotations where id = v_revision_of;
+      if v_parent_number is not null then
+        v_base_number := regexp_replace(v_parent_number, '-V[0-9]+$', '');
+        select coalesce(max(
+          nullif(substring(number from '-V([0-9]+)$'), '')::int
+        ), 1) + 1
+        into v_next_version
+        from public.quotations
+        where number = v_base_number or number ~ ('^' || v_base_number || '-V[0-9]+$');
+
+        v_number := v_base_number || '-V' || lpad(v_next_version::text, 2, '0');
+      else
+        v_number := public.next_document_number(p_type);
+      end if;
+    elsif p_type = 'proposal' then
+      select number into v_parent_number from public.proposals where id = v_revision_of;
+      if v_parent_number is not null then
+        v_base_number := regexp_replace(v_parent_number, '-V[0-9]+$', '');
+        select coalesce(max(
+          nullif(substring(number from '-V([0-9]+)$'), '')::int
+        ), 1) + 1
+        into v_next_version
+        from public.proposals
+        where number = v_base_number or number ~ ('^' || v_base_number || '-V[0-9]+$');
+
+        v_number := v_base_number || '-V' || lpad(v_next_version::text, 2, '0');
+      else
+        v_number := public.next_document_number(p_type);
+      end if;
+    else
+      v_number := public.next_document_number(p_type);
+    end if;
+  else
+    v_number := public.next_document_number(p_type);
+  end if;
+
+  perform set_config('nafa.issuing', '1', true);
+  if p_type = 'quotation' then
+    update public.quotations set number = v_number, status = 'sent', issued_at = now(), sent_at = now(),
+      snapshot = p_snapshot || jsonb_build_object('number', v_number, 'status', 'sent') where id = p_id;
+  elsif p_type = 'invoice' then
+    update public.invoices set number = v_number, state = 'issued', issued_at = now(),
+      snapshot = p_snapshot || jsonb_build_object('number', v_number, 'status', 'issued') where id = p_id;
+  else
+    update public.proposals set number = v_number, status = 'sent', issued_at = now(), sent_at = now(),
+      snapshot = p_snapshot || jsonb_build_object('number', v_number, 'status', 'sent') where id = p_id;
+  end if;
+  perform set_config('nafa.issuing', '0', true);
+  return v_number;
+end $$;
+revoke all on function public.issue_document(public.document_type, uuid, jsonb, timestamptz) from public, anon;
+grant execute on function public.issue_document(public.document_type, uuid, jsonb, timestamptz) to authenticated;
+
+-- ===== migrations/20261031000001_project_finance.sql =====
+-- NAFA Business OS — Project Budget & Profit Management
+--
+-- Reuses: companies, leads, quotations, invoices, invoice_payments, profiles (employees), payment_method.
+-- Adds:   projects, project_team, project_invoices (link table, so issued invoices are never modified),
+--         project_revenue_items, expense_categories, project_budgets, vendors, expenses, expense_payments,
+--         reimbursements, finance_audit.
+--
+-- Money rules
+--   * Revenue and cost are GST-exclusive. GST on a bill is a cost only when it is NOT recoverable
+--     (expenses.gst_recoverable = false); recoverable input GST is tracked separately and never counted.
+--   * An expense counts toward actuals only once approved and not soft-deleted.
+--   * A reimbursement counts toward project cost only when approved/reimbursed AND not linked to an
+--     already-recorded expense (reimbursements.expense_id is null) => never double counted.
+--   * Payments are never deleted, only voided. Records are soft-deleted; only an admin can restore.
+
+-- ---------------------------------------------------------------------------
+-- Roles. profiles.role (admin/member) is unchanged; finance_role grants access to this module.
+-- Existing members default to 'none' => no access to financial data until an admin grants it.
+-- ---------------------------------------------------------------------------
+create type public.finance_role as enum ('none', 'operations', 'project_manager', 'accounts', 'management');
+alter table public.profiles add column finance_role public.finance_role not null default 'none';
+
+create type public.project_status as enum ('planning', 'confirmed', 'in_progress', 'completed', 'settled', 'cancelled');
+create type public.revenue_kind as enum ('additional_charge', 'change_order');
+create type public.approval_status as enum ('submitted', 'approved', 'rejected');
+create type public.reimbursement_status as enum ('submitted', 'approved', 'rejected', 'reimbursed');
+
+-- admin and 'management'/'accounts' manage everything; project_manager/operations see assigned projects only.
+create function public.fin_role() returns text
+language sql stable security definer set search_path = ''
+as $$
+  select case when p.role = 'admin' then 'admin' else p.finance_role::text end
+  from public.profiles p where p.id = auth.uid() and p.is_active;
+$$;
+create function public.fin_any() returns boolean
+language sql stable security definer set search_path = ''
+as $$ select coalesce(public.fin_role(), 'none') <> 'none'; $$;
+create function public.fin_manage() returns boolean
+language sql stable security definer set search_path = ''
+as $$ select coalesce(public.fin_role(), 'none') in ('admin', 'management', 'accounts'); $$;
+create function public.fin_can_read_project(p_project uuid) returns boolean
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  return public.fin_manage() or (
+    public.fin_any() and exists (select 1 from public.project_team t where t.project_id = p_project and t.user_id = auth.uid())
+  );
+end $$;
+revoke all on function public.fin_role(), public.fin_any(), public.fin_manage(), public.fin_can_read_project(uuid) from public, anon;
+grant execute on function public.fin_role(), public.fin_any(), public.fin_manage(), public.fin_can_read_project(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Tables
+-- ---------------------------------------------------------------------------
+create table public.projects (
+  id                    uuid primary key default gen_random_uuid(),
+  project_number        bigint generated always as identity,
+  name                  text not null check (length(btrim(name)) > 0),
+  company_id            uuid references public.companies (id) on delete set null,
+  lead_id               uuid references public.leads (id) on delete set null,
+  quotation_id          uuid references public.quotations (id) on delete set null,
+  category              text not null default '',
+  location              text not null default '',
+  start_date            date,
+  end_date              date,
+  manager_id            uuid references public.profiles (id) on delete set null,
+  status                public.project_status not null default 'planning',
+  approved_value        numeric(14, 2) not null default 0 check (approved_value >= 0),   -- GST-exclusive
+  final_billing_amount  numeric(14, 2) check (final_billing_amount is null or final_billing_amount >= 0),
+  notes                 text not null default '',
+  created_by            uuid default auth.uid() references public.profiles (id) on delete set null,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now(),
+  deleted_at            timestamptz,
+  deleted_by            uuid references public.profiles (id) on delete set null,
+  constraint projects_dates check (end_date is null or start_date is null or end_date >= start_date)
+);
+create index projects_company_idx on public.projects (company_id);
+create index projects_manager_idx on public.projects (manager_id);
+create index projects_start_idx on public.projects (start_date) where deleted_at is null;
+create trigger projects_updated_at before update on public.projects for each row execute function public.set_updated_at();
+
+create table public.project_team (
+  project_id uuid not null references public.projects (id) on delete cascade,
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  primary key (project_id, user_id)
+);
+create index project_team_user_idx on public.project_team (user_id);
+
+-- Links an existing invoice to a project. A separate table: issued invoices are immutable.
+create table public.project_invoices (
+  id         uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  invoice_id uuid not null unique references public.invoices (id) on delete cascade,
+  linked_by  uuid default auth.uid() references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index project_invoices_project_idx on public.project_invoices (project_id);
+
+create table public.project_revenue_items (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references public.projects (id) on delete cascade,
+  kind        public.revenue_kind not null,
+  description text not null check (length(btrim(description)) > 0),
+  amount      numeric(14, 2) not null check (amount <> 0),   -- GST-exclusive; negative for a reducing change order
+  approved    boolean not null default false,
+  item_date   date not null default ((now() at time zone 'Asia/Kolkata')::date),
+  created_by  uuid default auth.uid() references public.profiles (id) on delete set null,
+  created_at  timestamptz not null default now(),
+  deleted_at  timestamptz,
+  deleted_by  uuid references public.profiles (id) on delete set null
+);
+create index project_revenue_items_project_idx on public.project_revenue_items (project_id);
+
+create table public.expense_categories (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null check (length(btrim(name)) > 0),
+  sort_order integer not null default 100,
+  is_default boolean not null default false,
+  is_active  boolean not null default true
+);
+create unique index expense_categories_name_uidx on public.expense_categories (lower(btrim(name)));
+insert into public.expense_categories (name, sort_order, is_default) values
+  ('Manpower & Staffing', 1, true), ('Fabrication & Production', 2, true), ('LED Screens & AV', 3, true),
+  ('Sound & Lighting', 4, true), ('Decoration & Florals', 5, true), ('Printing & Branding', 6, true),
+  ('Transportation & Logistics', 7, true), ('Accommodation', 8, true), ('Food & Beverages', 9, true),
+  ('Artist & Entertainment', 10, true), ('Photography & Videography', 11, true), ('Venue & Permissions', 12, true),
+  ('Security & Housekeeping', 13, true), ('Equipment Rental', 14, true), ('Client Reimbursements', 15, true),
+  ('Miscellaneous', 16, true);
+
+create table public.project_budgets (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references public.projects (id) on delete cascade,
+  category_id uuid not null references public.expense_categories (id) on delete restrict,
+  amount      numeric(14, 2) not null default 0 check (amount >= 0),   -- GST-exclusive estimate
+  unique (project_id, category_id)
+);
+create index project_budgets_category_idx on public.project_budgets (category_id);
+
+create table public.vendors (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null check (length(btrim(name)) > 0),
+  gstin      text not null default '',
+  phone      text not null default '',
+  email      text not null default '',
+  notes      text not null default '',
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  deleted_by uuid references public.profiles (id) on delete set null
+);
+create unique index vendors_name_uidx on public.vendors (lower(btrim(name))) where deleted_at is null;
+
+create table public.expenses (
+  id               uuid primary key default gen_random_uuid(),
+  expense_number   bigint generated always as identity,
+  project_id       uuid not null references public.projects (id) on delete restrict,
+  expense_date     date not null default ((now() at time zone 'Asia/Kolkata')::date),
+  category_id      uuid not null references public.expense_categories (id) on delete restrict,
+  description      text not null check (length(btrim(description)) > 0),
+  vendor_id        uuid references public.vendors (id) on delete set null,
+  bill_number      text,
+  qty              numeric(14, 3) not null default 1 check (qty > 0),
+  unit             text not null default 'nos',
+  rate             numeric(14, 2) not null default 0 check (rate >= 0),
+  subtotal         numeric(14, 2) generated always as (round(qty * rate, 2)) stored,
+  gst_amount       numeric(14, 2) not null default 0 check (gst_amount >= 0),
+  gst_recoverable  boolean not null default true,
+  total_amount     numeric(14, 2) generated always as (round(qty * rate, 2) + gst_amount) stored,
+  estimated_amount numeric(14, 2) check (estimated_amount is null or estimated_amount >= 0),
+  due_date         date,
+  approval_status  public.approval_status not null default 'approved',
+  notes            text not null default '',
+  created_by       uuid default auth.uid() references public.profiles (id) on delete set null,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  deleted_at       timestamptz,
+  deleted_by       uuid references public.profiles (id) on delete set null
+);
+create index expenses_project_idx on public.expenses (project_id, expense_date desc) where deleted_at is null;
+create index expenses_vendor_idx on public.expenses (vendor_id);
+create index expenses_category_idx on public.expenses (category_id);
+-- the same vendor bill cannot be entered twice on a project
+create unique index expenses_bill_uidx on public.expenses (project_id, vendor_id, lower(btrim(bill_number)))
+  where bill_number is not null and btrim(bill_number) <> '' and vendor_id is not null and deleted_at is null;
+create trigger expenses_updated_at before update on public.expenses for each row execute function public.set_updated_at();
+
+create table public.expense_payments (
+  id            uuid primary key default gen_random_uuid(),
+  expense_id    uuid not null references public.expenses (id) on delete restrict,
+  paid_on       date not null,
+  amount        numeric(14, 2) not null check (amount > 0),
+  method        public.payment_method not null default 'bank_transfer',
+  reference     text,
+  notes         text,
+  voided_at     timestamptz,
+  voided_reason text,
+  created_by    uuid default auth.uid() references public.profiles (id) on delete set null,
+  created_at    timestamptz not null default now(),
+  constraint expense_payments_void_reason check (voided_at is null or length(btrim(coalesce(voided_reason, ''))) > 0)
+);
+create index expense_payments_expense_idx on public.expense_payments (expense_id);
+-- duplicate-entry protection: same expense, date, amount and reference cannot be recorded twice
+create unique index expense_payments_dup_uidx on public.expense_payments (expense_id, paid_on, amount, coalesce(btrim(reference), ''))
+  where voided_at is null;
+
+create table public.reimbursements (
+  id              uuid primary key default gen_random_uuid(),
+  person_id       uuid default auth.uid() references public.profiles (id) on delete set null,
+  person_name     text not null check (length(btrim(person_name)) > 0),
+  project_id      uuid not null references public.projects (id) on delete restrict,
+  expense_date    date not null default ((now() at time zone 'Asia/Kolkata')::date),
+  description     text not null check (length(btrim(description)) > 0),
+  category_id     uuid not null references public.expense_categories (id) on delete restrict,
+  amount          numeric(14, 2) not null check (amount > 0),
+  status          public.reimbursement_status not null default 'submitted',
+  reimbursed_on   date,
+  expense_id      uuid references public.expenses (id) on delete set null,   -- set when already recorded as an expense => not counted twice
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  deleted_at      timestamptz,
+  deleted_by      uuid references public.profiles (id) on delete set null,
+  constraint reimbursements_paid_date check (status <> 'reimbursed' or reimbursed_on is not null)
+);
+create index reimbursements_project_idx on public.reimbursements (project_id) where deleted_at is null;
+create index reimbursements_person_idx on public.reimbursements (person_id);
+create trigger reimbursements_updated_at before update on public.reimbursements for each row execute function public.set_updated_at();
+
+create table public.finance_audit (
+  id         bigint generated always as identity primary key,
+  at         timestamptz not null default now(),
+  actor      uuid,
+  table_name text not null,
+  row_id     uuid,
+  action     text not null,
+  old_row    jsonb,
+  new_row    jsonb
+);
+create index finance_audit_row_idx on public.finance_audit (table_name, row_id);
+create index finance_audit_at_idx on public.finance_audit (at desc);
+
+-- ---------------------------------------------------------------------------
+-- Triggers: audit log, soft-delete rules, payment guard, approval default
+-- ---------------------------------------------------------------------------
+create function public.fin_audit() returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+declare r jsonb := to_jsonb(coalesce(new, old));
+begin
+  insert into public.finance_audit (actor, table_name, row_id, action, old_row, new_row)
+  values (auth.uid(), tg_table_name, (r ->> 'id')::uuid, tg_op,
+          case when tg_op <> 'INSERT' then to_jsonb(old) end, case when tg_op <> 'DELETE' then to_jsonb(new) end);
+  return null;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['projects', 'project_invoices', 'project_revenue_items', 'project_budgets', 'vendors', 'expenses',
+                           'expense_payments', 'reimbursements', 'expense_categories'] loop
+    execute format('create trigger %I after insert or update or delete on public.%I for each row execute function public.fin_audit()', t || '_audit', t);
+  end loop;
+end $$;
+
+-- Soft delete: managers may delete, only an admin may restore; deleted_by is stamped by the database.
+create function public.fin_soft_delete_guard() returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if old.deleted_at is null and new.deleted_at is not null then
+    if not public.fin_manage() then raise exception 'NOT_AUTHORISED: only accounts/management can delete financial records' using errcode = '42501'; end if;
+    new.deleted_by := auth.uid();
+  elsif old.deleted_at is not null and new.deleted_at is null then
+    if not public.is_admin() then raise exception 'NOT_AUTHORISED: only an administrator can restore deleted records' using errcode = '42501'; end if;
+    new.deleted_by := null;
+  elsif old.deleted_at is not null and not public.is_admin() then
+    raise exception 'RECORD_DELETED: this record has been deleted' using errcode = '23514';
+  end if;
+  return new;
+end $$;
+do $$
+declare t text;
+begin
+  foreach t in array array['projects', 'project_revenue_items', 'vendors', 'expenses', 'reimbursements'] loop
+    execute format('create trigger %I before update on public.%I for each row execute function public.fin_soft_delete_guard()', t || '_softdel', t);
+  end loop;
+end $$;
+
+-- Expenses added by non-managers are 'submitted' and need approval; managers' entries are approved.
+-- Only a manager may change approval_status.
+create function public.expenses_guard() returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.approval_status := case when public.fin_manage() then coalesce(new.approval_status, 'approved') else 'submitted' end;
+  elsif new.approval_status is distinct from old.approval_status and not public.fin_manage() then
+    raise exception 'NOT_AUTHORISED: only accounts/management can approve expenses' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+create trigger expenses_guard before insert or update on public.expenses for each row execute function public.expenses_guard();
+
+-- Payments: row-locks the expense, can never exceed the bill, and can only be voided afterwards.
+create function public.expense_payments_guard() returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+declare e record; paid numeric;
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'PAYMENT_IMMUTABLE: payments can only be voided' using errcode = '23514';
+  elsif tg_op = 'UPDATE' then
+    if old.voided_at is not null or new.voided_at is null or (to_jsonb(new) - 'voided_at' - 'voided_reason') is distinct from (to_jsonb(old) - 'voided_at' - 'voided_reason') then
+      raise exception 'PAYMENT_IMMUTABLE: payments can only be voided' using errcode = '23514';
+    end if;
+    return new;
+  end if;
+  select ex.total_amount, ex.deleted_at, ex.approval_status into e from public.expenses ex where ex.id = new.expense_id for update;
+  if not found or e.deleted_at is not null then raise exception 'EXPENSE_NOT_FOUND' using errcode = '23503'; end if;
+  if e.approval_status <> 'approved' then raise exception 'EXPENSE_NOT_APPROVED: approve the expense before recording payments' using errcode = '23514'; end if;
+  select coalesce(sum(p.amount), 0) into paid from public.expense_payments p where p.expense_id = new.expense_id and p.voided_at is null;
+  if paid + new.amount > e.total_amount then
+    raise exception 'PAYMENT_EXCEEDS_BALANCE: payable balance is %', e.total_amount - paid using errcode = '23514';
+  end if;
+  return new;
+end $$;
+create trigger expense_payments_guard before insert or update or delete on public.expense_payments for each row execute function public.expense_payments_guard();
+
+-- ---------------------------------------------------------------------------
+-- RLS
+-- ---------------------------------------------------------------------------
+alter table public.projects enable row level security;
+alter table public.project_team enable row level security;
+alter table public.project_invoices enable row level security;
+alter table public.project_revenue_items enable row level security;
+alter table public.expense_categories enable row level security;
+alter table public.project_budgets enable row level security;
+alter table public.vendors enable row level security;
+alter table public.expenses enable row level security;
+alter table public.expense_payments enable row level security;
+alter table public.reimbursements enable row level security;
+alter table public.finance_audit enable row level security;
+
+revoke all on public.projects, public.project_team, public.project_invoices, public.project_revenue_items, public.expense_categories,
+  public.project_budgets, public.vendors, public.expenses, public.expense_payments, public.reimbursements, public.finance_audit from anon, authenticated;
+grant select, insert, update on public.projects, public.project_invoices, public.project_revenue_items, public.expense_categories,
+  public.project_budgets, public.vendors, public.expenses, public.expense_payments, public.reimbursements to authenticated;
+grant select, insert, delete on public.project_team to authenticated;
+grant select, delete on public.project_invoices to authenticated;
+grant delete on public.project_budgets to authenticated;
+grant select on public.finance_audit to authenticated;
+
+-- projects: assigned users and managers read; managers write. Deleted rows are visible to managers only (trash).
+create policy projects_select on public.projects for select to authenticated
+  using ((select public.fin_can_read_project(id)) and (deleted_at is null or (select public.fin_manage())));
+create policy projects_insert on public.projects for insert to authenticated with check ((select public.fin_manage()));
+create policy projects_update on public.projects for update to authenticated
+  using ((select public.fin_manage())) with check ((select public.fin_manage()));
+
+create policy project_team_select on public.project_team for select to authenticated
+  using ((select public.fin_manage()) or user_id = (select auth.uid()));
+create policy project_team_write on public.project_team for insert to authenticated with check ((select public.fin_manage()));
+create policy project_team_delete on public.project_team for delete to authenticated using ((select public.fin_manage()));
+
+-- Revenue data: managers only (project managers and operations never see revenue or profit).
+create policy project_invoices_select on public.project_invoices for select to authenticated using ((select public.fin_manage()));
+create policy project_invoices_insert on public.project_invoices for insert to authenticated with check ((select public.fin_manage()));
+create policy project_invoices_delete on public.project_invoices for delete to authenticated using ((select public.fin_manage()));
+create policy project_revenue_select on public.project_revenue_items for select to authenticated using ((select public.fin_manage()));
+create policy project_revenue_insert on public.project_revenue_items for insert to authenticated with check ((select public.fin_manage()));
+create policy project_revenue_update on public.project_revenue_items for update to authenticated
+  using ((select public.fin_manage())) with check ((select public.fin_manage()));
+
+create policy expense_categories_select on public.expense_categories for select to authenticated using ((select public.fin_any()));
+create policy expense_categories_insert on public.expense_categories for insert to authenticated with check ((select public.fin_manage()));
+create policy expense_categories_update on public.expense_categories for update to authenticated
+  using ((select public.fin_manage())) with check ((select public.fin_manage()));
+
+create policy project_budgets_select on public.project_budgets for select to authenticated using ((select public.fin_can_read_project(project_id)));
+create policy project_budgets_insert on public.project_budgets for insert to authenticated with check ((select public.fin_manage()));
+create policy project_budgets_update on public.project_budgets for update to authenticated
+  using ((select public.fin_manage())) with check ((select public.fin_manage()));
+create policy project_budgets_delete on public.project_budgets for delete to authenticated using ((select public.fin_manage()));
+
+create policy vendors_select on public.vendors for select to authenticated
+  using ((select public.fin_any()) and (deleted_at is null or (select public.fin_manage())));
+create policy vendors_insert on public.vendors for insert to authenticated with check ((select public.fin_manage()));
+create policy vendors_update on public.vendors for update to authenticated
+  using ((select public.fin_manage())) with check ((select public.fin_manage()));
+
+-- Expenses: managers do everything; assigned users read, add 'submitted' expenses, and edit their own while still submitted.
+create policy expenses_select on public.expenses for select to authenticated
+  using ((select public.fin_can_read_project(project_id)) and (deleted_at is null or (select public.fin_manage())));
+create policy expenses_insert on public.expenses for insert to authenticated
+  with check ((select public.fin_manage()) or ((select public.fin_can_read_project(project_id)) and created_by = (select auth.uid())));
+create policy expenses_update on public.expenses for update to authenticated
+  using ((select public.fin_manage()) or (created_by = (select auth.uid()) and approval_status = 'submitted' and deleted_at is null))
+  with check ((select public.fin_manage()) or (created_by = (select auth.uid()) and approval_status = 'submitted'));
+
+create policy expense_payments_select on public.expense_payments for select to authenticated
+  using (exists (select 1 from public.expenses e where e.id = expense_id and (select public.fin_can_read_project(e.project_id))));
+create policy expense_payments_insert on public.expense_payments for insert to authenticated with check ((select public.fin_manage()));
+create policy expense_payments_update on public.expense_payments for update to authenticated
+  using ((select public.fin_manage())) with check ((select public.fin_manage()));
+
+create policy reimbursements_select on public.reimbursements for select to authenticated
+  using ((select public.fin_manage()) or person_id = (select auth.uid()));
+create policy reimbursements_insert on public.reimbursements for insert to authenticated
+  with check ((select public.fin_manage()) or (
+    (select public.fin_any()) and person_id = (select auth.uid()) and status = 'submitted' and (select public.fin_can_read_project(project_id))));
+create policy reimbursements_update on public.reimbursements for update to authenticated
+  using ((select public.fin_manage())) with check ((select public.fin_manage()));
+
+create policy finance_audit_select on public.finance_audit for select to authenticated
+  using ((select public.fin_role()) in ('admin', 'management'));
+
+-- ---------------------------------------------------------------------------
+-- Views (security invoker: RLS of the caller applies)
+-- ---------------------------------------------------------------------------
+-- One row per live expense with payment totals. cost_amount is the GST-exclusive project cost.
+create view public.expense_list with (security_invoker = true) as
+select e.id, 'EXP-' || lpad(e.expense_number::text, 6, '0') as expense_code, e.project_id, p.name as project_name, e.expense_date,
+       e.category_id, c.name as category_name, e.description, e.vendor_id, v.name as vendor_name, e.bill_number, e.qty, e.unit, e.rate,
+       e.subtotal, e.gst_amount, e.gst_recoverable, e.total_amount, e.estimated_amount, e.due_date, e.approval_status, e.notes,
+       e.created_by, e.created_at, e.deleted_at,
+       case when e.gst_recoverable then e.subtotal else e.total_amount end as cost_amount,
+       coalesce(pay.paid, 0) as paid_amount,
+       e.total_amount - coalesce(pay.paid, 0) as outstanding_amount,
+       case when coalesce(pay.paid, 0) >= e.total_amount then 'paid'
+            when e.due_date is not null and e.due_date < (now() at time zone 'Asia/Kolkata')::date then 'overdue'
+            when coalesce(pay.paid, 0) > 0 then 'partial' else 'pending' end as payment_status,
+       pay.last_paid_on
+from public.expenses e
+join public.projects p on p.id = e.project_id
+join public.expense_categories c on c.id = e.category_id
+left join public.vendors v on v.id = e.vendor_id
+left join lateral (
+  select sum(x.amount) as paid, max(x.paid_on) as last_paid_on
+  from public.expense_payments x where x.expense_id = e.id and x.voided_at is null
+) pay on true;
+
+-- Cost rows used for every actual: approved, live expenses plus approved reimbursements that are not already an expense.
+create view public.project_cost_lines with (security_invoker = true) as
+select e.project_id, e.category_id, e.expense_date as cost_date, e.cost_amount as amount, 'expense'::text as source, e.id as source_id
+from public.expense_list e where e.deleted_at is null and e.approval_status = 'approved'
+union all
+select r.project_id, r.category_id, r.expense_date, r.amount, 'reimbursement', r.id
+from public.reimbursements r
+where r.deleted_at is null and r.status in ('approved', 'reimbursed') and r.expense_id is null;
+
+create view public.budget_status with (security_invoker = true) as
+with actual as (
+  select project_id, category_id, sum(amount) as amount from public.project_cost_lines group by project_id, category_id
+), keys as (
+  select project_id, category_id from public.project_budgets
+  union select project_id, category_id from actual
+)
+select k.project_id, k.category_id, c.name as category_name, coalesce(b.amount, 0) as budget, coalesce(a.amount, 0) as actual,
+       coalesce(b.amount, 0) - coalesce(a.amount, 0) as remaining,
+       case when coalesce(b.amount, 0) > 0 then round(coalesce(a.amount, 0) / b.amount * 100, 1) end as utilization_pct,
+       case when coalesce(a.amount, 0) > coalesce(b.amount, 0) then 'over'
+            when coalesce(b.amount, 0) > 0 and a.amount >= b.amount * 0.9 then 'critical'
+            when coalesce(b.amount, 0) > 0 and a.amount >= b.amount * 0.75 then 'warning' else 'ok' end as alert
+from keys k
+join public.expense_categories c on c.id = k.category_id
+join public.projects p on p.id = k.project_id and p.deleted_at is null
+left join public.project_budgets b on b.project_id = k.project_id and b.category_id = k.category_id
+left join actual a on a.project_id = k.project_id and a.category_id = k.category_id;
+
+-- Per-project money summary. All amounts GST-exclusive unless named gst_*. Derived figures (profit, margins) are computed in the app.
+create view public.project_finance_summary with (security_invoker = true) as
+select p.id as project_id, p.name, p.status, p.company_id, p.start_date, p.end_date, p.approved_value, p.final_billing_amount,
+       coalesce(p.start_date, (p.created_at at time zone 'Asia/Kolkata')::date) as basis_date,
+       coalesce((select sum(r.amount) from public.project_revenue_items r where r.project_id = p.id and r.deleted_at is null and r.approved and r.kind = 'additional_charge'), 0) as additional_charges,
+       coalesce((select sum(r.amount) from public.project_revenue_items r where r.project_id = p.id and r.deleted_at is null and r.approved and r.kind = 'change_order'), 0) as change_orders,
+       coalesce((select sum(i.grand_total - i.cgst - i.sgst - i.igst) from public.project_invoices pi join public.invoices i on i.id = pi.invoice_id
+                 where pi.project_id = p.id and i.state = 'issued'), 0) as invoiced_ex_gst,
+       coalesce((select sum(i.cgst + i.sgst + i.igst) from public.project_invoices pi join public.invoices i on i.id = pi.invoice_id
+                 where pi.project_id = p.id and i.state = 'issued'), 0) as gst_collected,
+       coalesce((select sum(i.grand_total) from public.project_invoices pi join public.invoices i on i.id = pi.invoice_id
+                 where pi.project_id = p.id and i.state = 'issued'), 0) as invoiced_total,
+       coalesce((select sum(ip.amount) from public.project_invoices pi join public.invoices i on i.id = pi.invoice_id
+                 join public.invoice_payments ip on ip.invoice_id = i.id and ip.voided_at is null
+                 where pi.project_id = p.id and i.state = 'issued'), 0) as received,
+       coalesce((select sum(b.amount) from public.project_budgets b where b.project_id = p.id), 0) as budget_total,
+       coalesce((select sum(l.amount) from public.project_cost_lines l where l.project_id = p.id and l.source = 'expense'), 0) as expense_cost,
+       coalesce((select sum(l.amount) from public.project_cost_lines l where l.project_id = p.id and l.source = 'reimbursement'), 0) as reimbursement_cost,
+       coalesce((select sum(e.gst_amount) from public.expense_list e where e.project_id = p.id and e.deleted_at is null and e.approval_status = 'approved' and e.gst_recoverable), 0) as gst_input_recoverable,
+       coalesce((select sum(e.total_amount) from public.expense_list e where e.project_id = p.id and e.deleted_at is null and e.approval_status = 'approved'), 0) as bills_total,
+       coalesce((select sum(e.paid_amount) from public.expense_list e where e.project_id = p.id and e.deleted_at is null and e.approval_status = 'approved'), 0) as bills_paid
+from public.projects p
+where p.deleted_at is null;
+
+-- Vendor bills with outstanding balance (a vendor bill is an expense that has a vendor).
+create view public.vendor_payables with (security_invoker = true) as
+select e.vendor_id, e.vendor_name, e.id as expense_id, e.expense_code, e.project_id, e.project_name, e.bill_number, e.expense_date, e.due_date,
+       e.total_amount, e.paid_amount, e.outstanding_amount, e.payment_status
+from public.expense_list e
+where e.deleted_at is null and e.approval_status = 'approved' and e.vendor_id is not null;
+
+revoke all on public.expense_list, public.project_cost_lines, public.budget_status, public.project_finance_summary, public.vendor_payables from anon;
+grant select on public.expense_list, public.project_cost_lines, public.budget_status, public.project_finance_summary, public.vendor_payables to authenticated;
+
+-- Monthly revenue (issued invoices, GST-exclusive, by invoice date) vs cost (by cost date), optionally for one project.
+create function public.finance_monthly(p_from date default null, p_to date default null, p_project uuid default null)
+returns table (month date, revenue numeric, cost numeric)
+language sql stable set search_path = ''
+as $$
+  with rev as (
+    select date_trunc('month', i.invoice_date)::date as m, sum(i.grand_total - i.cgst - i.sgst - i.igst) as v
+    from public.project_invoices pi join public.invoices i on i.id = pi.invoice_id
+    where i.state = 'issued' and (p_project is null or pi.project_id = p_project)
+      and (p_from is null or i.invoice_date >= p_from) and (p_to is null or i.invoice_date <= p_to)
+    group by 1
+  ), cst as (
+    select date_trunc('month', l.cost_date)::date as m, sum(l.amount) as v
+    from public.project_cost_lines l
+    where (p_project is null or l.project_id = p_project)
+      and (p_from is null or l.cost_date >= p_from) and (p_to is null or l.cost_date <= p_to)
+    group by 1
+  )
+  select coalesce(r.m, c.m), coalesce(r.v, 0), coalesce(c.v, 0) from rev r full join cst c on c.m = r.m order by 1;
+$$;
+revoke all on function public.finance_monthly(date, date, uuid) from public, anon;
+grant execute on function public.finance_monthly(date, date, uuid) to authenticated;
+
+-- Cost by category for projects whose basis date is in range (or for one project).
+create function public.finance_category_totals(p_from date default null, p_to date default null, p_project uuid default null)
+returns table (category_id uuid, category_name text, amount numeric)
+language sql stable set search_path = ''
+as $$
+  select l.category_id, c.name, sum(l.amount)
+  from public.project_cost_lines l
+  join public.expense_categories c on c.id = l.category_id
+  join public.project_finance_summary s on s.project_id = l.project_id
+  where (p_project is null or l.project_id = p_project)
+    and (p_project is not null or ((p_from is null or s.basis_date >= p_from) and (p_to is null or s.basis_date <= p_to)))
+  group by l.category_id, c.name order by 3 desc;
+$$;
+revoke all on function public.finance_category_totals(date, date, uuid) from public, anon;
+grant execute on function public.finance_category_totals(date, date, uuid) to authenticated;
+
+-- ===== migrations/20261101000001_app_installs.sql =====
+-- NAFA Business OS — App installation tracking and in-app notifications
+--
+-- notifications          generic per-user inbox (this is the only notification system; the bell reads it)
+-- app_installs           one row per (user, device): who installed the PWA, on what, when, first launch, last activity
+-- install_alert_settings singleton: who gets install alerts and by which channel
+-- record_app_install()   the ONLY way rows are written; de-duplicates per (user, device) and creates the alerts once
+--
+-- Privacy: device_id is a random identifier generated in the browser; platform and browser are coarse names.
+-- No contacts, files, location, IP address or user-agent string is stored.
+
+create type public.install_platform as enum ('android', 'ios', 'windows', 'macos', 'linux', 'other');
+create type public.install_source as enum ('pwa', 'home_screen');
+create type public.install_status as enum ('installed', 'launched');
+
+create table public.notifications (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  type       text not null,
+  title      text not null,
+  body       text not null default '',
+  data       jsonb not null default '{}'::jsonb,
+  read_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+create index notifications_user_idx on public.notifications (user_id, created_at desc);
+create index notifications_unread_idx on public.notifications (user_id) where read_at is null;
+create index notifications_install_idx on public.notifications ((data ->> 'install_id')) where type = 'app_install';
+
+create table public.app_installs (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid not null references public.profiles (id) on delete cascade,
+  user_email      text not null default '',
+  device_id       text not null check (length(device_id) between 16 and 64),
+  platform        public.install_platform not null,
+  browser         text not null default '' check (length(browser) <= 40),
+  source          public.install_source not null,
+  status          public.install_status not null default 'installed',
+  installed_at    timestamptz not null default now(),
+  first_launch_at timestamptz,
+  last_active_at  timestamptz,
+  unique (user_id, device_id)
+);
+create index app_installs_installed_idx on public.app_installs (installed_at desc);
+create index app_installs_platform_idx on public.app_installs (platform);
+
+create table public.install_alert_settings (
+  id               boolean primary key default true check (id),
+  enabled          boolean not null default true,
+  extra_recipients uuid[] not null default '{}',       -- in addition to every active admin
+  email_enabled    boolean not null default false,
+  alert_emails     text[] not null default '{}'        -- delivery addresses for email alerts (needs RESEND_API_KEY)
+);
+insert into public.install_alert_settings (id) values (true);
+
+-- ---------------------------------------------------------------------------
+-- RLS
+-- ---------------------------------------------------------------------------
+alter table public.notifications enable row level security;
+alter table public.app_installs enable row level security;
+alter table public.install_alert_settings enable row level security;
+revoke all on public.notifications, public.app_installs, public.install_alert_settings from anon, authenticated;
+
+-- A person sees and clears only their own notifications; nobody inserts directly.
+grant select on public.notifications to authenticated;
+grant update (read_at) on public.notifications to authenticated;
+create policy notifications_select on public.notifications for select to authenticated using (user_id = (select auth.uid()));
+create policy notifications_update on public.notifications for update to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
+-- Installation analytics: administrators only.
+grant select on public.app_installs to authenticated;
+create policy app_installs_select on public.app_installs for select to authenticated using ((select public.is_admin()));
+
+grant select, update on public.install_alert_settings to authenticated;
+create policy install_alert_settings_select on public.install_alert_settings for select to authenticated using ((select public.is_admin()));
+create policy install_alert_settings_update on public.install_alert_settings for update to authenticated
+  using ((select public.is_admin())) with check ((select public.is_admin()));
+
+-- Live updates for the bell (Supabase Realtime obeys the RLS above). Skipped where Realtime is not installed.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    alter publication supabase_realtime add table public.notifications;
+  end if;
+end $$;
+
+create view public.app_install_list with (security_invoker = true) as
+select i.id, i.user_id, coalesce(nullif(p.full_name, ''), i.user_email) as user_name, i.user_email, i.device_id, i.platform, i.browser, i.source,
+       i.status, i.installed_at, i.first_launch_at, i.last_active_at
+from public.app_installs i
+join public.profiles p on p.id = i.user_id;
+revoke all on public.app_install_list from anon;
+grant select on public.app_install_list to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- record_app_install
+--   p_event: 'installed' (appinstalled / add-to-home-screen detected), 'launched' (running as an installed app),
+--            'active' (heartbeat while running as an installed app).
+--   An ordinary browser visit is never reported by the client and 'active' alone never creates an installation.
+--   Alerts are created exactly once per (user, device): when the installation row is first created.
+-- ---------------------------------------------------------------------------
+create function public.record_app_install(p_device_id text, p_platform text, p_browser text, p_source text, p_event text)
+returns jsonb
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_user     uuid := auth.uid();
+  v_platform public.install_platform;
+  v_source   public.install_source;
+  v_row      public.app_installs;
+  v_new      boolean := false;
+  v_launched boolean := false;
+  v_name     text;
+  v_email    text;
+  v_label    text;
+  v_nth      integer;
+  v_settings public.install_alert_settings;
+  v_body     text;
+begin
+  if not public.is_team_member() then raise exception 'NOT_AUTHORISED' using errcode = '42501'; end if;
+  if p_event not in ('installed', 'launched', 'active') then raise exception 'INVALID_EVENT' using errcode = '22023'; end if;
+  if p_device_id is null or length(p_device_id) not between 16 and 64 then raise exception 'INVALID_DEVICE' using errcode = '22023'; end if;
+
+  v_platform := case when p_platform in ('android', 'ios', 'windows', 'macos', 'linux') then p_platform::public.install_platform else 'other' end;
+  v_source := case when p_source = 'home_screen' then 'home_screen'::public.install_source else 'pwa'::public.install_source end;
+
+  select * into v_row from public.app_installs where user_id = v_user and device_id = p_device_id for update;
+
+  if not found then
+    if p_event = 'active' then return jsonb_build_object('recorded', false); end if;   -- a heartbeat is not an installation
+    select u.email into v_email from auth.users u where u.id = v_user;
+    insert into public.app_installs (user_id, user_email, device_id, platform, browser, source, status, first_launch_at, last_active_at)
+    values (v_user, coalesce(v_email, ''), p_device_id, v_platform, left(coalesce(p_browser, ''), 40), v_source,
+            case when p_event = 'launched' then 'launched'::public.install_status else 'installed'::public.install_status end,
+            case when p_event = 'launched' then now() end, now())
+    on conflict (user_id, device_id) do nothing
+    returning * into v_row;
+    if v_row.id is null then
+      select * into v_row from public.app_installs where user_id = v_user and device_id = p_device_id;   -- lost a race: someone else created it
+    else
+      v_new := true;
+    end if;
+  else
+    if p_event = 'launched' and v_row.first_launch_at is null then
+      update public.app_installs set first_launch_at = now(), status = 'launched', last_active_at = now() where id = v_row.id returning * into v_row;
+      v_launched := true;
+    else
+      update public.app_installs set last_active_at = now() where id = v_row.id returning * into v_row;
+    end if;
+  end if;
+
+  if v_launched then
+    -- first launch after the install alert was raised: add the timestamp to that alert instead of sending a second one
+    update public.notifications
+       set data = data || jsonb_build_object('first_launch_at', v_row.first_launch_at)
+     where type = 'app_install' and data ->> 'install_id' = v_row.id::text;
+  end if;
+
+  if v_new then
+    select * into v_settings from public.install_alert_settings;
+    select coalesce(nullif(p.full_name, ''), v_row.user_email, 'A team member') into v_name from public.profiles p where p.id = v_user;
+    select count(*) into v_nth from public.app_installs where user_id = v_user;
+    v_label := case v_platform when 'android' then 'an Android' when 'ios' then 'an iPhone/iPad' when 'windows' then 'a Windows' when 'macos' then 'a macOS'
+                               when 'linux' then 'a Linux' else 'a' end;
+    v_body := v_name || case when v_source = 'home_screen' then ' has added the NAFA CRM app to the home screen of ' else ' has installed the NAFA CRM app on ' end
+              || v_label || ' device' || case when v_nth > 1 then ' (device no. ' || v_nth || ' for this user).' else '.' end;
+    if v_settings.enabled then
+      insert into public.notifications (user_id, type, title, body, data)
+      select p.id, 'app_install', 'New CRM App Installation', v_body,
+             jsonb_build_object('install_id', v_row.id, 'user_id', v_user, 'user_name', v_name, 'user_email', v_row.user_email, 'platform', v_row.platform,
+                                'browser', v_row.browser, 'source', v_row.source, 'installed_at', v_row.installed_at, 'first_launch_at', v_row.first_launch_at,
+                                'device_number', v_nth)
+      from public.profiles p
+      where p.is_active and p.id <> v_user and (p.role = 'admin' or p.id = any (v_settings.extra_recipients));
+    end if;
+    return jsonb_build_object('recorded', true, 'created', true, 'install_id', v_row.id, 'message', v_body,
+                              'email_to', case when v_settings.enabled and v_settings.email_enabled then to_jsonb(v_settings.alert_emails) else '[]'::jsonb end);
+  end if;
+  return jsonb_build_object('recorded', true, 'created', false, 'install_id', v_row.id);
+end $$;
+revoke all on function public.record_app_install(text, text, text, text, text) from public, anon;
+grant execute on function public.record_app_install(text, text, text, text, text) to authenticated;
+
