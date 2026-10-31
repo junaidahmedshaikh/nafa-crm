@@ -55,5 +55,5 @@ export function NoFinanceAccess() {
 export function Meter({ pct, alert }: { pct: number | null; alert: BudgetAlert }) {
   const w = Math.min(100, Math.max(0, pct ?? (alert === "over" ? 100 : 0)));
   const color = alert === "over" || alert === "critical" ? "var(--danger)" : alert === "warning" ? "var(--warning)" : "var(--success)";
-  return <div className="h-1.5 w-full min-w-16 rounded-full bg-black/5"><div className="h-1.5 rounded-full" style={{ width: `${w}%`, background: color }} /></div>;
+  return <div className="h-1.5 w-full min-w-16 rounded-full bg-foreground/5"><div className="h-1.5 rounded-full" style={{ width: `${w}%`, background: color }} /></div>;
 }

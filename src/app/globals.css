@@ -17,22 +17,40 @@
   --border: #e4e4e7;
   --border-strong: #cfcfd4;
 
-  --nav: #121214;
-  --nav-hover: #1f1f25;
-  --nav-active: #2a2a33;
+  --nav: #111511;
+  --nav-hover: #1c211b;
+  --nav-active: #40433b;
   --nav-foreground: #fafafa;
-  --nav-muted: #a1a1aa;
+  --nav-muted: #a4a99c;
 
-  --accent: #967026;
-  --accent-soft: #fbf6ec;
+  --accent: #8b6620;
+  --accent-soft: #fbf3e1;
   --accent-foreground: #ffffff;
+
+  /* Approved brand palette (raw values; themes below map them onto the semantic tokens). */
+  --brand-almond: #eec679;
+  --brand-green: #60e06e;
+  --brand-cricket: #697c68;
+  --brand-storm: #40433b;
+  --brand-ink: #111511;
+  --brand-black: #000100;
+
+  --secondary-accent: #697c68;
+  --btn-secondary-border: var(--border-strong);
+  --btn-primary: var(--nav);
+  --btn-primary-hover: var(--nav-active);
+  --btn-primary-foreground: var(--nav-foreground);
+  --danger-foreground: #ffffff;
+  /* Printed-document surfaces (previews, uploaded images) stay white in every theme. */
+  --paper: #ffffff;
+  --paper-foreground: #111511;
 
   --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --success: #2f7d4f;
+  --success: #2a7346;
   --success-soft: #e6f3ec;
-  --warning: #a8661a;
+  --warning: #98590f;
   --warning-soft: #fbf0df;
   --danger: #b4332f;
   --danger-soft: #fbe9e8;
@@ -112,6 +130,20 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-foreground: var(--accent-foreground);
+  --color-secondary-accent: var(--secondary-accent);
+  --color-btn-secondary-border: var(--btn-secondary-border);
+  --color-btn-primary: var(--btn-primary);
+  --color-btn-primary-hover: var(--btn-primary-hover);
+  --color-btn-primary-foreground: var(--btn-primary-foreground);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-paper: var(--paper);
+  --color-paper-foreground: var(--paper-foreground);
+  --color-brand-almond: var(--brand-almond);
+  --color-brand-green: var(--brand-green);
+  --color-brand-cricket: var(--brand-cricket);
+  --color-brand-storm: var(--brand-storm);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-black: var(--brand-black);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
@@ -177,6 +209,82 @@ body {
 :focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+html.dark {
+  /* Surfaces: Dark Tone Ink page, adjusted November Storms cards, Vantablack navigation */
+  --background: #111511;
+  --foreground: #ecebe4;
+  --surface: #1c201b;
+  --surface-muted: #262a24;
+  --muted-foreground: #a3a89b;
+  --border: #30352d;
+  --border-strong: #40433b;
+
+  --nav: #000100;
+  --nav-hover: #151914;
+  --nav-active: #40433b;
+  --nav-foreground: #ecebe4;
+  --nav-muted: #9ea395;
+
+  /* Almond Cookie is the highlight; Lightish Green means success; Cricket Green supports */
+  --accent: #eec679;
+  --accent-soft: #eec67924;
+  --accent-foreground: #111511;
+  --success: #60e06e;
+  --success-soft: #60e06e1f;
+  --warning: #f0b35a;
+  --warning-soft: #f0b35a22;
+  --danger: #ff7b73;
+  --danger-soft: #ff7b7322;
+  --danger-foreground: #111511;
+  --info: #84b0e0;
+  --info-soft: #84b0e022;
+  --secondary-accent: #697c68;
+  --btn-secondary-border: #697c68;
+  --btn-primary: #eec679;
+  --btn-primary-hover: #f4d594;
+  --btn-primary-foreground: #111511;
+  --ring: #eec679;
+
+  /* shadcn / base-ui token names used by generated components */
+  --card: #1c201b;
+  --card-foreground: #ecebe4;
+  --popover: #1c201b;
+  --popover-foreground: #ecebe4;
+  --primary: #eec679;
+  --primary-foreground: #111511;
+  --secondary: #40433b;
+  --secondary-foreground: #ecebe4;
+  --muted: #262a24;
+  --destructive: #ff7b73;
+  --input: #40433b;
+  --chart-1: #eec679;
+  --chart-2: #60e06e;
+  --chart-3: #697c68;
+  --chart-4: #84b0e0;
+  --chart-5: #f0b35a;
+  --sidebar: #000100;
+  --sidebar-foreground: #ecebe4;
+  --sidebar-primary: #eec679;
+  --sidebar-primary-foreground: #111511;
+  --sidebar-accent: #40433b;
+  --sidebar-accent-foreground: #ecebe4;
+  --sidebar-border: #30352d;
+  --sidebar-ring: #eec679;
+}
+
+/* Applied for ~250 ms while the theme changes so colours fade instead of snapping. */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, fill 0.2s ease, stroke 0.2s ease !important;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
 }
 
 dialog::backdrop {

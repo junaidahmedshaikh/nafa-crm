@@ -194,7 +194,7 @@ function ImageUploader({ proposalId, sectionId, attachments }: { proposalId: str
           title={lightboxImage.filename}
           description={lightboxImage.caption || `${Math.round(lightboxImage.size_bytes / 1024)} KB`}
         >
-          <div className="mt-2 flex flex-col items-center justify-center overflow-hidden rounded-lg bg-black/5 p-2">
+          <div className="mt-2 flex flex-col items-center justify-center overflow-hidden rounded-lg bg-foreground/5 p-2">
             {lightboxImage.data_uri && (
               <img
                 src={lightboxImage.data_uri}

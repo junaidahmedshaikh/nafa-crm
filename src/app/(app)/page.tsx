@@ -237,7 +237,7 @@ export default async function DashboardPage() {
                         <span className="font-medium text-foreground">{LEAD_STATUS_LABELS[p.status]}</span>
                         <span className="tabular-nums font-semibold text-foreground">{p.count}</span>
                       </div>
-                      <div className="mt-1.5 h-1.5 rounded-full bg-black/5 overflow-hidden" aria-hidden>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-foreground/5 overflow-hidden" aria-hidden>
                         <div
                           className={cn(
                             "h-full rounded-full transition-all",

@@ -314,3 +314,31 @@ Each browser gets a random device id (stored in `localStorage`); one row per use
 * Uninstalling cannot be detected by any browser, so there is no "uninstalled" status.
 * Web push notifications are not built. In-app (live) and email alerts are.
 * "Assigned team administrator" has no equivalent in this CRM (there are no teams); pick extra recipients individually instead.
+
+---
+
+## Dark mode and theming
+
+Each user can choose **Light**, **Dark** or **System default** (follows the device) from the account menu (top-right avatar → Appearance) or **Settings → Appearance**. It applies instantly, is saved to their profile, and is applied again on every sign-in and device. Until someone chooses, everyone keeps the existing light look.
+
+### Setup
+Run `supabase/migrations/20261102000001_theme_preference.sql` in the Supabase SQL editor (fresh projects: `setup-all.sql` already includes it). Until it is run the app keeps working in light mode and the choice is remembered on that device only.
+
+### How it works
+* **Design tokens**: all colours live in `src/app/globals.css`. `:root` is the light theme; `.dark` overrides the same tokens. Components use token classes (`bg-surface`, `text-muted`, `border-border`, `bg-accent`...) and never hardcode theme colours. A new module gets both themes for free as long as it does the same.
+* **Palette** (raw values are available as `--brand-*`):
+
+| Colour | Hex | Used for (dark) |
+|---|---|---|
+| Dark Tone Ink | `#111511` | page background (also the light theme's sidebar) |
+| Vantablack | `#000100` | sidebar and login background |
+| November Storms | `#40433B` | borders, active navigation item, inputs |
+| Almond Cookie | `#EEC679` | the main highlight: primary buttons, links, focus ring, active items |
+| Lightish Green | `#60E06E` | success and positive figures |
+| Cricket Green | `#697C68` | secondary button outline and hover |
+
+* **Light theme** is unchanged apart from the palette showing up in the sidebar and a soft Almond tint, and three text colours (accent, success, warning) darkened a shade so badges meet WCAG AA.
+* **No flash on load**: a tiny inline script in `<head>` reads the `nafa_theme` cookie and sets the `dark` class before first paint; the sign-in action sets that cookie from the saved preference.
+* **Contrast**: `tests/unit/theme.test.ts` computes WCAG contrast from the real tokens for both themes (body text 7:1, secondary text, badges, buttons 4.5:1 or better).
+* Printed documents (quotation, invoice and proposal PDFs and their previews) are paper and stay white in both themes.
+* Adding a colour: add it to both `:root` and `.dark`, expose it under `@theme inline`, and the contrast test will tell you if a text/background pair is too weak.

@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { NotificationBell } from "@/components/layout/notification-bell";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import type { ThemePreference } from "@/lib/theme";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -107,7 +109,7 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
 function Brand({ name, collapsed }: { name: string; collapsed?: boolean }) {
   return (
     <Link href="/" className={cn("flex items-center gap-3 py-4 text-nav-foreground group transition-colors", collapsed ? "justify-center px-2" : "px-5")}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-sm font-bold text-white shadow-xs group-hover:brightness-110" aria-hidden>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-sm font-bold text-accent-foreground shadow-xs group-hover:brightness-110" aria-hidden>
         N
       </span>
       {!collapsed && (
@@ -161,13 +163,14 @@ function Breadcrumb() {
 }
 
 export function AppShell({
-  userName, userEmail, businessName, userId, isAdmin, children,
+  userName, userEmail, businessName, userId, isAdmin, theme, children,
 }: {
   userName: string;
   userEmail: string;
   businessName: string;
   userId: string;
   isAdmin: boolean;
+  theme: ThemePreference;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -268,7 +271,7 @@ export function AppShell({
               <button
                 type="button"
                 onClick={() => setCreateOpen(!createOpen)}
-                className="inline-flex h-8.5 items-center gap-1.5 rounded-md bg-nav px-3 text-xs font-semibold text-nav-foreground shadow-xs hover:bg-nav-active transition-colors cursor-pointer"
+                className="inline-flex h-8.5 items-center gap-1.5 rounded-md bg-btn-primary px-3 text-xs font-semibold text-btn-primary-foreground shadow-xs hover:bg-btn-primary-hover transition-colors cursor-pointer"
                 aria-expanded={createOpen}
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -350,6 +353,10 @@ export function AppShell({
                       <ReceiptText className="h-3.5 w-3.5 text-muted" aria-hidden />
                       <span>Document &amp; Bank Settings</span>
                     </Link>
+                  </div>
+                  <div className="border-t border-border px-2.5 py-2">
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">Appearance</p>
+                    <ThemeToggle initial={theme} compact />
                   </div>
                   <div className="border-t border-border pt-1">
                     <form action={logout}>

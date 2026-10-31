@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/safe-redirect";
+import { cookies } from "next/headers";
+import { THEME_COOKIE } from "@/lib/theme";
+import { getThemePreference } from "@/lib/theme-server";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email address").max(254),
@@ -18,7 +21,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   if (!parsed.success) return { error: parsed.error.issues[0].message, email };
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data: signedIn, error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) {
     console.error("[login]", error.code, error.status, error.message);
     // Credential failures stay generic (never reveal whether an account exists);
@@ -31,6 +34,9 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
     else if (!error.status) message = "Could not reach Supabase. Check NEXT_PUBLIC_SUPABASE_URL in .env.local and your connection.";
     else message = `Sign-in failed (${error.code ?? error.status}).`;
     return { error: message, email };
+  }
+  if (signedIn?.user) {
+    (await cookies()).set(THEME_COOKIE, await getThemePreference(supabase, signedIn.user.id), { path: "/", maxAge: 31536000, sameSite: "lax", httpOnly: false });
   }
   redirect(safeNextPath(String(formData.get("next") ?? "")));
 }

@@ -418,12 +418,12 @@ export function PreviewPane({ load, deps }: { load: () => Promise<ActionResult<{
             <iframe
               title="Document preview"
               srcDoc={state.html}
-              className="h-full w-full border-0 bg-white shadow-sm"
+              className="h-full w-full border-0 bg-paper shadow-sm"
             />
           </div>
         )}
         {state.loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/75 backdrop-blur-xs text-xs font-medium text-foreground gap-2" role="status">
+          <div className="absolute inset-0 flex items-center justify-center bg-paper/75 backdrop-blur-xs text-xs font-medium text-paper-foreground gap-2" role="status">
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
             Updating preview…
           </div>
@@ -462,7 +462,7 @@ export function PreviewPane({ load, deps }: { load: () => Promise<ActionResult<{
                 title="Fullscreen Document preview"
                 srcDoc={state.html}
                 style={{ width: "794px", height: "1123px" }}
-                className="border border-border bg-white shadow-xl rounded-md"
+                className="border border-border bg-paper shadow-xl rounded-md"
               />
             ) : (
               <p className="text-sm text-muted">Preview not available.</p>

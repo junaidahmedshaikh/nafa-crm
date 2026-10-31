@@ -77,7 +77,7 @@ export function HBarChart({ rows, color = GOLD, ariaLabel }: { rows: { label: st
       {rows.map((r) => (
         <li key={r.label} className="text-xs">
           <div className="mb-1 flex justify-between gap-3"><span className="truncate">{r.label}</span><span className="tabular-nums text-muted">{formatINR(r.value)}</span></div>
-          <div className="h-2 rounded-full bg-black/5"><div className="h-2 rounded-full" style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, background: color }} /></div>
+          <div className="h-2 rounded-full bg-foreground/5"><div className="h-2 rounded-full" style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, background: color }} /></div>
         </li>
       ))}
     </ul>

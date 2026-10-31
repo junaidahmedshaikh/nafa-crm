@@ -106,7 +106,7 @@ export function ProjectForm({ id, defaults, companies, people, leads, invoices =
                   return (
                     <li key={pid} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-muted py-1 pl-3 pr-1.5 text-xs">
                       <span className="font-medium">{i?.number}</span><span className="text-muted">{formatINR(i?.grand_total)}</span>
-                      <button type="button" aria-label={`Remove invoice ${i?.number}`} className="rounded-full p-0.5 hover:bg-black/10" onClick={() => setPicked((p) => p.filter((x) => x !== pid))}><X className="h-3 w-3" /></button>
+                      <button type="button" aria-label={`Remove invoice ${i?.number}`} className="rounded-full p-0.5 hover:bg-foreground/10" onClick={() => setPicked((p) => p.filter((x) => x !== pid))}><X className="h-3 w-3" /></button>
                     </li>
                   );
                 })}

@@ -55,7 +55,7 @@ export default async function FollowUpsPage({ searchParams }: PageProps<"/follow
             >
               {TAB_LABELS[t]}
               {count !== null && count > 0 && (
-                <span className={cn("rounded-full px-1.5 text-xs tabular-nums", t === "overdue" ? "bg-danger-soft text-danger" : "bg-black/[0.06] text-foreground/70")}>{count}</span>
+                <span className={cn("rounded-full px-1.5 text-xs tabular-nums", t === "overdue" ? "bg-danger-soft text-danger" : "bg-foreground/[0.06] text-foreground/70")}>{count}</span>
               )}
             </Link>
           );

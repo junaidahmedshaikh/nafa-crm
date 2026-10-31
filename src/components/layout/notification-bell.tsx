@@ -78,7 +78,7 @@ export function NotificationBell({ userId, isAdmin }: { userId: string; isAdmin:
       >
         <Bell className="h-4.5 w-4.5" aria-hidden />
         {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-none text-danger-foreground">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
@@ -100,7 +100,7 @@ export function NotificationBell({ userId, isAdmin }: { userId: string; isAdmin:
               const isInstall = n.type === "app_install";
               const body = (
                 <div className="flex gap-3">
-                  <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.read_at ? "bg-black/5 text-muted" : "bg-accent-soft text-accent")}>
+                  <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.read_at ? "bg-foreground/5 text-muted" : "bg-accent-soft text-accent")}>
                     <MonitorSmartphone className="h-4 w-4" aria-hidden />
                   </span>
                   <div className="min-w-0 flex-1">

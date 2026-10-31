@@ -13,7 +13,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     <div className="flex min-h-screen items-center justify-center bg-nav px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center text-nav-foreground">
-          <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded bg-accent text-lg font-bold text-white" aria-hidden>N</span>
+          <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded bg-accent text-lg font-bold text-accent-foreground" aria-hidden>N</span>
           <h1 className="text-lg font-semibold tracking-wide">NAFA Business OS</h1>
           <p className="text-sm text-nav-muted">NAFA Events &amp; Activations · Internal access only</p>
         </div>
