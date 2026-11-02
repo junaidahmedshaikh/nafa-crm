@@ -1,4 +1,4 @@
-import { chromium, type Browser } from "playwright-core";
+import type { Browser } from "playwright-core";
 
 /**
  * HTML → PDF with headless Chromium (Playwright). Text stays real, selectable text; fonts are embedded
@@ -11,6 +11,9 @@ import { chromium, type Browser } from "playwright-core";
 let browser: Promise<Browser> | null = null;
 
 async function launch(): Promise<Browser> {
+  // Loaded on demand: only generating a PDF needs the browser library. A top-level import made every document
+  // action (cancel, void, record payment...) load it, and a packaging problem there broke all of them.
+  const { chromium } = await import("playwright-core");
   // On Vercel / AWS Lambda there is no system Chromium: use the serverless build bundled by @sparticuz/chromium.
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
     const sparticuz = (await import("@sparticuz/chromium")).default;

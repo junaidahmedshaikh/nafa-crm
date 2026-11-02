@@ -2,7 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Fonts/logo are read from disk by the PDF templates; make sure serverless bundles include them.
-  outputFileTracingIncludes: { "/api/documents/**": ["./src/assets/**"], "/**": ["./src/assets/**"] },
+  // playwright-core reads browsers.json / package.json / help.json at load time; the file tracer cannot see those, so
+  // name them for every route that can generate a PDF (the PDF API, and the document pages whose actions email a PDF).
+  outputFileTracingIncludes: {
+    "/api/documents/**": ["./src/assets/**", "./node_modules/playwright-core/**/*"],
+    "/invoices/**": ["./node_modules/playwright-core/**/*"],
+    "/quotations/**": ["./node_modules/playwright-core/**/*"],
+    "/proposals/**": ["./node_modules/playwright-core/**/*"],
+    "/**": ["./src/assets/**"],
+  },
   serverExternalPackages: ["playwright-core", "@sparticuz/chromium"],
   turbopack: {
     root: import.meta.dirname,
