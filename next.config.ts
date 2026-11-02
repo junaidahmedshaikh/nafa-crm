@@ -2,13 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Fonts/logo are read from disk by the PDF templates; make sure serverless bundles include them.
-  // playwright-core reads browsers.json / package.json / help.json at load time; the file tracer cannot see those, so
-  // name them for every route that can generate a PDF (the PDF API, and the document pages whose actions email a PDF).
+  // The PDF engine needs files the file tracer cannot see: playwright-core reads browsers.json / package.json /
+  // help.json at load time, and @sparticuz/chromium unpacks its brotli archives from its bin/ folder. Name them for
+  // every route that can generate a PDF (the PDF API, and the document pages whose actions email a PDF).
   outputFileTracingIncludes: {
-    "/api/documents/**": ["./src/assets/**", "./node_modules/playwright-core/**/*"],
-    "/invoices/**": ["./node_modules/playwright-core/**/*"],
-    "/quotations/**": ["./node_modules/playwright-core/**/*"],
-    "/proposals/**": ["./node_modules/playwright-core/**/*"],
+    "/api/documents/**": ["./src/assets/**", "./node_modules/playwright-core/**/*", "./node_modules/@sparticuz/chromium/**/*"],
+    "/invoices/**": ["./node_modules/playwright-core/**/*", "./node_modules/@sparticuz/chromium/**/*"],
+    "/quotations/**": ["./node_modules/playwright-core/**/*", "./node_modules/@sparticuz/chromium/**/*"],
+    "/proposals/**": ["./node_modules/playwright-core/**/*", "./node_modules/@sparticuz/chromium/**/*"],
     "/**": ["./src/assets/**"],
   },
   serverExternalPackages: ["playwright-core", "@sparticuz/chromium"],
