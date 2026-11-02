@@ -72,15 +72,20 @@ export async function saveContact(
         }
       }
     }
+    // WhatsApp consent columns exist only after that migration; send them only when the form carried them.
+    const { whatsapp_consent, whatsapp_consent_source, ...base } = parsed.data;
+    const row = whatsapp_consent === undefined ? base : { ...base, whatsapp_consent, whatsapp_consent_source: whatsapp_consent === "unknown" ? null : whatsapp_consent_source };
+    const dbError = (e: { code?: string; message: string }) =>
+      e.message.includes("OPT_OUT_LOCKED") ? "This person opted out of WhatsApp. Only an admin can record a new opt-in." : friendlyDbError(e);
     if (opts.id) {
-      const { data, error } = await supabase.from("contacts").update(parsed.data).eq("id", opts.id).select("id").maybeSingle();
-      if (error) return fail(friendlyDbError(error));
+      const { data, error } = await supabase.from("contacts").update(row).eq("id", opts.id).select("id").maybeSingle();
+      if (error) return fail(dbError(error));
       if (!data) return fail("This contact no longer exists.");
       refresh(["/contacts", `/contacts/${opts.id}`, "/leads"]);
       return { ok: true, data: { id: opts.id } };
     }
-    const { data, error } = await supabase.from("contacts").insert(parsed.data).select("id").single();
-    if (error) return fail(friendlyDbError(error));
+    const { data, error } = await supabase.from("contacts").insert(row).select("id").single();
+    if (error) return fail(dbError(error));
     refresh(["/contacts", "/companies"]);
     return { ok: true, data: { id: data.id } };
   });

@@ -300,3 +300,25 @@ describe("dashboard helpers", () => {
     });
   });
 });
+
+describe("expense titles", () => {
+  it("keeps an explicit title, falls back to the details when blank, and exposes it in expense_list", async () => {
+    await admin(async () => {
+      const p = await project("Titles");
+      const ins = (title: string | null, description: string) =>
+        q<{ id: string }>(`insert into expenses (project_id, category_id, title, description, rate) values ($1,$2,$3,$4,100) returning id`, [p, cat["Miscellaneous"], title, description]).then((r) => r[0].id);
+      const a = await ins("LED wall 12x8", "Rented from Orbit AV, includes operator");
+      const b = await ins("", "Crew lunch for 40 people");
+      const c = await ins("  Padded  ", "");
+      const rows = await q<{ id: string; title: string; description: string }>(`select id, title, description from expense_list where project_id = $1`, [p]);
+      const by = Object.fromEntries(rows.map((r) => [r.id, r]));
+      expect(by[a]).toMatchObject({ title: "LED wall 12x8", description: "Rented from Orbit AV, includes operator" });
+      expect(by[b].title).toBe("Crew lunch for 40 people");
+      expect(by[c]).toMatchObject({ title: "Padded", description: "" }); // details are optional now
+      await expect(ins("", "")).rejects.toThrow();                        // some text is required
+      await expect(q(`update expenses set title = '', description = '' where id = $1`, [a])).rejects.toThrow();
+      await q(`update expenses set title = 'Renamed' where id = $1`, [a]);
+      expect((await q<{ title: string }>(`select title from expense_list where id = $1`, [a]))[0].title).toBe("Renamed");
+    });
+  });
+});

@@ -85,6 +85,12 @@ export const contactSchema = (cc = "+91") =>
     whatsapp: optPhone(cc),
     communication_notes: optText(1000),
     notes: optText(5000),
+    // Only present when the WhatsApp feature is set up; the server ignores them otherwise.
+    whatsapp_consent: z.enum(["unknown", "opted_in", "opted_out"]).optional(),
+    whatsapp_consent_source: optText(300),
+  }).refine((v) => v.whatsapp_consent !== "opted_in" || !!v.whatsapp_consent_source, {
+    path: ["whatsapp_consent_source"],
+    message: "Say how consent was given (e.g. signed form, replied YES)",
   });
 export type ContactFormInput = z.input<ReturnType<typeof contactSchema>>;
 export type ContactFormData = z.output<ReturnType<typeof contactSchema>>;

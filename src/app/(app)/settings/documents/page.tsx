@@ -3,6 +3,7 @@ import { emailConfigured } from "@/lib/documents/email";
 import { PageHeader } from "@/components/ui/layout";
 import { requireMember } from "@/lib/auth";
 import { getDocSettings } from "@/lib/documents/repo";
+import { editableTerms, termsToLines, TERMS_TYPES } from "@/lib/documents/invoice-terms";
 import type { DocumentSettingsValues } from "@/lib/documents/schemas";
 
 export const metadata = { title: "Document settings" };
@@ -24,6 +25,13 @@ export default async function DocumentSettingsPage() {
     quotation_terms: s.quotation_terms, quotation_milestones: s.quotation_milestones.map((m) => ({ label: m.label, kind: m.kind, value: String(Number(m.value)), due_text: m.due_text ?? "" })),
     invoice_payment_terms: s.invoice_payment_terms, invoice_notes: s.invoice_notes, gst_declaration_enabled: s.gst_declaration_enabled, gst_declaration: s.gst_declaration,
   };
+  // Terms are editable once the invoice-terms migration has run (the column then exists, even if still NULL = defaults).
+  const termsReady = "invoice_terms_common" in s;
+  if (termsReady) {
+    const editable = editableTerms(s);
+    Object.assign(defaults, { udyam_number: s.udyam_number ?? "", terms_common: termsToLines(editable.common) });
+    for (const t of TERMS_TYPES) Object.assign(defaults, { [`terms_${t}`]: termsToLines(editable.byType[t]) });
+  }
   const admin = profile.role === "admin";
   return (
     <>
@@ -33,7 +41,7 @@ export default async function DocumentSettingsPage() {
         description={`Company details, bank details, defaults, wording and numbering for quotations, proposals and invoices. Email delivery is ${emailConfigured() ? "configured" : "not configured (see README → Email)"}.`}
       />
       <div className="max-w-4xl space-y-8">
-        <DocumentSettingsForm defaults={defaults} canEdit={admin} />
+        <DocumentSettingsForm defaults={defaults} canEdit={admin} termsReady={termsReady} />
         <NumberingForm rows={rows} canEdit={admin} />
       </div>
     </>

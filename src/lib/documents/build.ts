@@ -4,6 +4,7 @@ import type {
   BankDetails, ClientInfo, CompanyInfo, DocItem, InvoiceRender, MilestoneRow, ProposalRender, ProposalSectionRender, QuotationRender,
 } from "./types";
 import { amountInWords } from "./words";
+import { resolveInvoiceTerms, type TermsSettings } from "./invoice-terms";
 import { longDate } from "./templates/base";
 import { PROPOSAL_SECTION_TITLES } from "./schemas";
 
@@ -17,7 +18,7 @@ export type DocSettings = {
   default_quotation_validity_days: number; default_invoice_due_days: number;
   quotation_terms: string[]; quotation_milestones: { label: string; kind: "percent" | "fixed"; value: number | string; due_text: string }[];
   invoice_payment_terms: string; invoice_notes: string; gst_declaration_enabled: boolean; gst_declaration: string;
-};
+} & TermsSettings;
 
 export const settingsToCompany = (s: DocSettings): CompanyInfo => ({
   name: s.company_name, email: s.company_email, phone: s.company_phone, website: s.company_website, location: s.company_location,
@@ -107,7 +108,7 @@ export function quotationFromRows(q: QuotationRow, items: DbItem[], milestones: 
 // ---------------------------------------------------------------------------
 type InvoiceLike = ClientLike & {
   project_name?: string | null; project_location?: string | null; project_date_text?: string | null; quotation_number?: string | null; place_of_supply?: string | null;
-  invoice_date: string; due_date: string | null; config: CalcConfig; items: ItemLike[]; payment_terms_text?: string | null; notes_text?: string | null;
+  invoice_date: string; due_date: string | null; config: CalcConfig; items: ItemLike[]; payment_terms_text?: string | null; notes_text?: string | null; terms_type?: string | null;
 };
 
 export function assembleInvoice(
@@ -124,6 +125,7 @@ export function assembleInvoice(
     payment_terms_text: d.payment_terms_text ?? "", notes_text: d.notes_text ?? "",
     // The no-GST declaration is printed only when no GST is being charged AND the company has enabled it.
     gst_declaration: d.config.tax.mode === "none" && s.gst_declaration_enabled && s.gst_declaration.trim() ? s.gst_declaration : null,
+    terms: resolveInvoiceTerms(s, d.terms_type),
     bank: settingsToBank(s), company: settingsToCompany(s),
   };
 }
@@ -134,7 +136,7 @@ export const invoiceFromInput = (i: InvoiceInput, meta: { number: string | null;
 export type InvoiceRow = ClientLike & {
   id: string; number: string | null; state: "draft" | "issued" | "cancelled"; quotation_id: string | null; lead_id: string | null; company_id: string | null; contact_id: string | null;
   project_name: string; project_location: string; project_date_text: string; quotation_number: string; place_of_supply: string;
-  invoice_date: string; due_date: string | null; config: unknown; payment_terms_text: string; notes_text: string; updated_at: string; grand_total: number | string;
+  invoice_date: string; due_date: string | null; config: unknown; payment_terms_text: string; notes_text: string; terms_type?: string; updated_at: string; grand_total: number | string;
   snapshot: InvoiceRender | null; cancel_reason: string | null;
 };
 

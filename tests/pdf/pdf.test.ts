@@ -5,6 +5,7 @@ import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { calculateDocument } from "@/lib/documents/calc";
 import { closePdfEngine, htmlToPdf } from "@/lib/documents/pdf";
 import { referenceInvoice, referenceQuotation, SAMPLE_ITEMS, sampleInvoice, sampleQuotation } from "@/lib/documents/samples";
+import { resolveInvoiceTerms } from "@/lib/documents/invoice-terms";
 import { renderInvoiceHtml } from "@/lib/documents/templates/invoice";
 import { renderProposalHtml } from "@/lib/documents/templates/proposal";
 import { renderQuotationHtml } from "@/lib/documents/templates/quotation";
@@ -74,6 +75,26 @@ describe.skipIf(!hasChromium)("PDF generation (Chromium)", () => {
       expect(text, s).toContain(s);
     }
     expect(text).not.toContain("CGST");
+  });
+
+  it("prints the common terms plus the event type's terms on the invoice, with nothing else lost", async () => {
+    const iv = { ...sampleInvoice(), terms: resolveInvoiceTerms({ udyam_number: "UDYAM-MH-01-0000001" }, "corporate") };
+    const { pdf, pages } = await htmlToPdf(renderInvoiceHtml(iv));
+    expect(pages).toBe(2);
+    const t = await pdfText(pdf);
+    const all = t.pages.join(" ").replace(/\s+/g, " ");
+    for (const s of [
+      "TERMS & CONDITIONS", "Subject to Mumbai jurisdiction.", "Bounced cheques attract bank charges", "CORPORATE EVENTS", "Purchase order:", "Udyam No. UDYAM-MH-01-0000001",
+      "GRAND TOTAL PAYABLE", "Federal Bank", "Authorised Signatory", "Thank you for your business",
+    ]) expect(all, s).toContain(s);
+    // the heading is never stranded at the bottom of a page away from its clauses
+    for (const page of t.pages) {
+      const i = page.indexOf("TERMS & CONDITIONS");
+      if (i >= 0) expect(page.slice(i), "heading followed by a clause on the same page").toMatch(/1\.\s*Payment is due/);
+    }
+    // a corporate invoice from a business with no Udyam number leaves the MSME clause out
+    const noUdyam = await htmlToPdf(renderInvoiceHtml({ ...sampleInvoice(), terms: resolveInvoiceTerms({}, "corporate") }));
+    expect((await pdfText(noUdyam.pdf)).pages.join(" ")).not.toContain("MSME");
   });
 
   it("flows a 45-line quotation over several pages with repeated headers, page numbers and no lost lines", async () => {

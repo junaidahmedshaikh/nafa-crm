@@ -53,7 +53,7 @@ export function newInvoiceValues(s: DocSettings, today: string, lead?: LeadOptio
     project_name: lead ? lead.event_name || lead.title : "", project_location: lead ? [lead.venue, lead.city].filter(Boolean).join(", ") : "",
     project_date_text: lead?.event_date ? dmy(lead.event_date) : "", place_of_supply: "",
     invoice_date: today, due_date: addDays(today, s.default_invoice_due_days),
-    config: defaultConfigValues(s, "invoice"), items: [], payment_terms_text: s.invoice_payment_terms, notes_text: s.invoice_notes,
+    config: defaultConfigValues(s, "invoice"), items: [], payment_terms_text: s.invoice_payment_terms, notes_text: s.invoice_notes, terms_type: "",
   };
 }
 
@@ -65,7 +65,7 @@ export function invoiceValuesFromRows(i: InvoiceRow, items: Parameters<typeof it
     project_name: i.project_name, project_location: i.project_location, project_date_text: i.project_date_text, place_of_supply: i.place_of_supply,
     invoice_date: i.invoice_date, due_date: i.due_date ?? "",
     config: configToFormValues(parseStoredConfig(i.config)), items: items.map(itemToFormValues),
-    payment_terms_text: i.payment_terms_text ?? "", notes_text: i.notes_text ?? "",
+    payment_terms_text: i.payment_terms_text ?? "", notes_text: i.notes_text ?? "", terms_type: (i.terms_type ?? "") as InvoiceFormValues["terms_type"],
   };
 }
 

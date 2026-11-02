@@ -4,6 +4,7 @@ import { ExportLink } from "@/components/shared/export-link";
 import { FilterForm } from "@/components/shared/filter-form";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
+import { ConsentBadge } from "@/components/whatsapp/bits";
 import { Card, DataTable, EmptyState, PageHeader, Pagination, Td, Th } from "@/components/ui/layout";
 import { requireMember } from "@/lib/auth";
 import { listContacts } from "@/lib/data/directory";
@@ -61,7 +62,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
           <>
             <DataTable>
               <thead>
-                <tr><Th>Name</Th><Th>Company</Th><Th>Email</Th><Th>Phone</Th><Th className="text-right">Leads</Th></tr>
+                <tr><Th>Name</Th><Th>Company</Th><Th>Email</Th><Th>Phone</Th>{rows.some((c) => c.whatsapp_consent) && <Th>WhatsApp</Th>}<Th className="text-right">Leads</Th></tr>
               </thead>
               <tbody>
                 {rows.map((c) => (
@@ -73,6 +74,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
                     <Td>{c.company_id ? <Link href={`/companies/${c.company_id}`} className="hover:underline">{c.company_name}</Link> : "—"}</Td>
                     <Td>{c.email ?? "—"}</Td>
                     <Td className="whitespace-nowrap">{c.phone ?? "—"}</Td>
+                    {rows.some((r) => r.whatsapp_consent) && <Td>{c.whatsapp_consent ? <ConsentBadge value={c.whatsapp_consent} /> : "—"}</Td>}
                     <Td className="text-right tabular-nums">{c.lead_count}</Td>
                   </tr>
                 ))}

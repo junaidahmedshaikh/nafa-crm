@@ -9,11 +9,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FormSection, Input, Select, Textarea } from "@/components/ui/form";
 import { saveDocumentSettings, saveSequence } from "@/lib/actions/documents";
+import { TERMS_TYPES, TERMS_TYPE_HINTS, TERMS_TYPE_LABELS } from "@/lib/documents/invoice-terms";
 import { documentSettingsSchema, type DocumentSettingsValues } from "@/lib/documents/schemas";
 
 const errText = (e: unknown): string | undefined => (e && typeof e === "object" && "message" in e ? String((e as { message?: unknown }).message ?? "") || undefined : undefined);
 
-export function DocumentSettingsForm({ defaults, canEdit }: { defaults: DocumentSettingsValues; canEdit: boolean }) {
+export function DocumentSettingsForm({ defaults, canEdit, termsReady = false }: { defaults: DocumentSettingsValues; canEdit: boolean; termsReady?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const form = useForm<DocumentSettingsValues, unknown, never>({ resolver: zodResolver(documentSettingsSchema) as never, defaultValues: defaults, mode: "onBlur" });
@@ -96,6 +97,27 @@ export function DocumentSettingsForm({ defaults, canEdit }: { defaults: Document
         <label className="flex items-center gap-2 text-[13px] font-medium sm:col-span-2"><input type="checkbox" className="h-4 w-4" disabled={dis} {...register("gst_declaration_enabled")} />Print a “no GST charged” declaration on invoices that charge no tax</label>
         <Field label="Declaration wording" className="sm:col-span-2" hint="Never printed on an invoice that charges GST." error={errText(errors.gst_declaration)}>{(p) => <Input {...p} {...register("gst_declaration")} disabled={dis || !gstOn} />}</Field>
       </FormSection>
+
+      {termsReady && (
+        <section className="rounded-lg border border-border bg-surface p-5">
+          <h2 className="text-sm font-semibold">Invoice terms &amp; conditions</h2>
+          <p className="mb-4 mt-0.5 text-xs text-muted">
+            Every invoice prints the common terms plus the terms for the event type chosen on that invoice. One clause per line. Terms are saved onto an invoice when it is issued, so editing them here never changes an issued invoice.
+            Have your CA review the GST, TDS and MSME wording, and a lawyer review the jurisdiction and damages clauses, once before relying on them.
+          </p>
+          <div className="space-y-4">
+            <Field label="Udyam registration number" hint="Fills “{udyam}” in the MSME clause. Leave blank if NAFA is not MSME-registered: those clauses are then left out of invoices." error={errText(errors.udyam_number)}>
+              {(p) => <Input {...p} {...register("udyam_number")} disabled={dis} placeholder="UDYAM-MH-00-0000000" autoComplete="off" />}
+            </Field>
+            <Field label="Common terms (all invoices)" error={errText(errors.terms_common)}>{(p) => <Textarea {...p} {...register("terms_common")} rows={12} disabled={dis} />}</Field>
+            {TERMS_TYPES.map((t) => (
+              <Field key={t} label={TERMS_TYPE_LABELS[t]} hint={TERMS_TYPE_HINTS[t]} error={errText(errors[`terms_${t}` as keyof typeof errors])}>
+                {(p) => <Textarea {...p} {...register(`terms_${t}` as "terms_wedding")} rows={12} disabled={dis} />}
+              </Field>
+            ))}
+          </div>
+        </section>
+      )}
 
       {canEdit && <div className="flex justify-end"><Button type="submit" variant="primary" loading={pending}>Save document settings</Button></div>}
     </form>

@@ -277,6 +277,30 @@ describe("invoices and payments", () => {
     });
   });
 
+  it("stores the invoice's terms type, lets a draft change it, and locks it once issued", async () => {
+    await as(async () => {
+      const id = await newInvoice({ terms_type: "btl" });
+      expect((await q<{ terms_type: string }>(`select terms_type from invoices where id=$1`, [id]))[0].terms_type).toBe("btl");
+      await q(`select public.save_invoice($1::jsonb)`, [JSON.stringify({ id, client_company: "Aurora", grand_total: 1000, subtotal: 1000, taxable_value: 1000, due_date: "2099-01-01", terms_type: "wedding", items: [item()] })]);
+      expect((await q<{ terms_type: string }>(`select terms_type from invoices where id=$1`, [id]))[0].terms_type).toBe("wedding");
+      expect((await q<{ terms_type: string }>(`select terms_type from invoices where id=$1`, [await newInvoice()]))[0].terms_type).toBe("");
+      await issueInvoice(id);
+      await expect(q(`update invoices set terms_type='corporate' where id=$1`, [id])).rejects.toThrow(/DOCUMENT_LOCKED/);
+      await expect(q(`select public.save_invoice($1::jsonb)`, [JSON.stringify({ id, terms_type: "corporate", items: [] })])).rejects.toThrow(/NOT_EDITABLE/);
+    });
+  });
+
+  it("rejects an unknown terms type, and starts with the built-in terms (NULL) and no Udyam number", async () => {
+    await as(async () => {
+      await expect(newInvoice({ terms_type: "bogus" })).rejects.toThrow(/terms_type/);
+      const [s] = await q<{ invoice_terms_common: unknown; invoice_terms_by_type: unknown; udyam_number: string }>(`select invoice_terms_common, invoice_terms_by_type, udyam_number from document_settings`);
+      expect(s).toEqual({ invoice_terms_common: null, invoice_terms_by_type: null, udyam_number: "" });
+      await q(`update document_settings set invoice_terms_common = '["One."]'::jsonb, invoice_terms_by_type = '{"btl":["Two."]}'::jsonb, udyam_number = 'UDYAM-1'`);
+      await expect(q(`update document_settings set invoice_terms_common = '"not an array"'::jsonb`)).rejects.toThrow();
+      await q(`update document_settings set invoice_terms_common = null, invoice_terms_by_type = null, udyam_number = ''`);
+    });
+  });
+
   it("freezes an issued invoice and logs payments in the activity history", async () => {
     await as(async () => {
       const id = await newInvoice();

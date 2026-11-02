@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArchiveButton } from "@/components/directory/archive-button";
 import { Badge, StatusBadge } from "@/components/ui/badge";
+import { ConsentBadge } from "@/components/whatsapp/bits";
 import { LinkButton } from "@/components/ui/button";
 import { Card, CardHeader, DataTable, DetailList, EmptyState, PageHeader, Td, Th } from "@/components/ui/layout";
 import { requireMember } from "@/lib/auth";
@@ -65,6 +66,17 @@ export default async function ContactDetailPage({ params }: PageProps<"/contacts
                 { label: "Email", value: c.email ? <a href={`mailto:${c.email}`} className="text-accent hover:underline">{c.email}</a> : null },
                 { label: "Phone", value: c.phone ? <a href={`tel:${c.phone}`} className="text-accent hover:underline">{c.phone}</a> : null },
                 { label: "WhatsApp", value: c.whatsapp },
+                ...(c.whatsapp_consent
+                  ? [{
+                      label: "WhatsApp consent",
+                      value: (
+                        <span className="space-y-0.5">
+                          <ConsentBadge value={c.whatsapp_consent} />
+                          {c.whatsapp_consent_source && <span className="block text-xs text-muted">{c.whatsapp_consent_source}{c.whatsapp_consent_at ? ` · ${formatDate(c.whatsapp_consent_at)}` : ""}</span>}
+                        </span>
+                      ),
+                    }]
+                  : []),
                 { label: "Created", value: formatDateTime(c.created_at) },
                 { label: "Updated", value: formatDateTime(c.updated_at) },
               ]}

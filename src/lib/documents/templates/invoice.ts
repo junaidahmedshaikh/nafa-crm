@@ -63,6 +63,14 @@ tr{break-inside:avoid}
 .pd .it{font-style:italic;color:#6e6e6e}
 .nt{margin-top:24.7pt;break-inside:avoid}
 .nt p{margin-top:5.7pt;font-size:6.7pt;line-height:7.4pt;color:#6e6e6e;width:449pt}
+.tc{margin-top:16pt}
+.tc .lblb{break-after:avoid}
+.tc .grp{margin-top:5.7pt}
+.tc .grp+.grp{margin-top:9pt}
+.tc .gh{break-after:avoid;font-size:5.8pt;font-weight:700;color:#6e6e6e;text-transform:uppercase;letter-spacing:0;margin-bottom:2.2pt}
+.tc ol{margin:0;padding:0 0 0 9pt;width:440pt}
+.tc li{font-size:5.8pt;line-height:6.9pt;color:#6e6e6e;margin-top:1.6pt;break-inside:avoid}
+.tc li b{color:#111;font-weight:700}
 .sig{position:relative;height:50pt;margin-top:.6pt;break-inside:avoid}
 .sig img{position:absolute;left:424.5pt;top:0;width:17pt;height:21.8pt}
 .sig .f{letter-spacing:.02em;position:absolute;right:2.5pt;top:25.7pt;font-weight:700;font-size:7.5pt;color:#111;white-space:nowrap}
@@ -129,6 +137,17 @@ export function renderInvoiceHtml(d: InvoiceRender, opts: RenderOptions = {}): s
     .filter(Boolean).join("  |  ");
 
   const notes = [d.notes_text.trim(), d.gst_declaration?.trim()].filter(Boolean).join(" ");
+  const clause = (c: string) => {
+    // "Payment schedule: 50% at booking…" prints its short lead-in label in bold.
+    const m = /^([^:]{3,40}):\s+([\s\S]*)$/.exec(c);
+    return m ? `<li><b>${esc(m[1])}:</b> ${esc(m[2])}</li>` : `<li>${esc(c)}</li>`;
+  };
+  const terms = !REF ? d.terms : undefined;
+  const termsHtml = terms && (terms.common.length || terms.specific.length)
+    ? `<div class="sec tc"><div class="lblb">Terms &amp; Conditions</div>
+${terms.common.length ? `<div class="grp"><ol>${terms.common.map(clause).join("")}</ol></div>` : ""}
+${terms.specific.length ? `<div class="grp"><div class="gh">${esc(terms.type_title)}</div><ol>${terms.specific.map(clause).join("")}</ol></div>` : ""}</div>`
+    : "";
   const site = co.website.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   const body = `<div class="sheet">
@@ -183,6 +202,7 @@ export function renderInvoiceHtml(d: InvoiceRender, opts: RenderOptions = {}): s
   <div class="line it">Please use the invoice number as the payment reference.</div>
 </div>
 <div class="sec nt"><div class="lblb">Notes / Declaration</div><p>${escMultiline(notes)}</p></div>
+${termsHtml}
 <div class="sig"><img src="${signatureDataUri()}" alt=""><div class="f">${esc(co.signatory_label)}</div><div class="s">Authorised Signatory</div></div>
 <div class="foot"><div class="ty">Thank you for your business.</div>
 <div class="co">${esc(co.name)}&nbsp;&nbsp;|&nbsp;&nbsp;${esc(co.email)}&nbsp;&nbsp;|&nbsp;&nbsp;${esc(co.phone)}&nbsp;&nbsp;|&nbsp;&nbsp;${esc(site ? `www.${site.replace(/^www\./, "")}` : "")}</div></div>

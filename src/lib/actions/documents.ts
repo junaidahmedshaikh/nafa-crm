@@ -9,6 +9,7 @@ import {
 } from "@/lib/documents/build";
 import { calculateDocument, computeMilestones, type CalcConfig } from "@/lib/documents/calc";
 import { sendEmailWithPdf, emailConfigured } from "@/lib/documents/email";
+import { linesToTerms } from "@/lib/documents/invoice-terms";
 import { renderHtml, renderPdf, pdfFileName } from "@/lib/documents/render";
 import {
   getDocSettings, getInvoiceFull, getProposalFull, getQuotationFull, loadProposalImages, loadProposalRender, todayIST,
@@ -75,7 +76,7 @@ function invoicePayload(i: InvoiceInput, id?: string) {
     id, quotation_id: i.quotation_id, quotation_number: i.quotation_number, lead_id: i.lead_id, company_id: i.company_id, contact_id: i.contact_id,
     client_name: i.client_name, client_company: i.client_company, client_address: i.client_address, client_email: i.client_email, client_phone: i.client_phone, client_gstin: i.client_gstin,
     project_name: i.project_name, project_location: i.project_location, project_date_text: i.project_date_text, place_of_supply: i.place_of_supply,
-    invoice_date: i.invoice_date, due_date: i.due_date, config: i.config, ...totals(calc), payment_terms_text: i.payment_terms_text, notes_text: i.notes_text,
+    invoice_date: i.invoice_date, due_date: i.due_date, config: i.config, ...totals(calc), payment_terms_text: i.payment_terms_text, notes_text: i.notes_text, terms_type: i.terms_type,
     items: itemRows(i.items, calc),
   };
 }
@@ -252,7 +253,7 @@ export async function duplicateInvoice(id: string): Promise<ActionResult<{ id: s
         project_name: i.project_name, project_location: i.project_location, project_date_text: i.project_date_text, place_of_supply: i.place_of_supply,
         invoice_date: today, due_date: addDays(today, s.default_invoice_due_days), config: i.config,
         subtotal: i.subtotal, discount_total: i.discount_total, agency_fee: i.agency_fee, taxable_value: i.taxable_value, cgst: i.cgst, sgst: i.sgst, igst: i.igst,
-        other_charges: i.other_charges, round_off: i.round_off, grand_total: i.grand_total, payment_terms_text: i.payment_terms_text, notes_text: i.notes_text,
+        other_charges: i.other_charges, round_off: i.round_off, grand_total: i.grand_total, payment_terms_text: i.payment_terms_text, notes_text: i.notes_text, terms_type: i.terms_type,
         items: full.items,
       },
     });
@@ -486,9 +487,18 @@ export async function saveDocumentSettings(values: DocumentSettingsValues): Prom
     if (profile.role !== "admin") return fail("Only an administrator can change document settings.");
     const parsed = documentSettingsSchema.safeParse(values);
     if (!parsed.success) return fail("Please fix the highlighted fields.", fieldErrorsFrom(parsed.error));
-    const d = parsed.data;
+    const { terms_common, terms_wedding, terms_corporate, terms_btl, terms_exhibition, terms_manpower, udyam_number, ...d } = parsed.data;
+    // The terms columns exist only after the invoice-terms migration; the form sends them only when they do.
+    const termsPatch = terms_common === undefined ? {} : {
+      invoice_terms_common: linesToTerms(terms_common),
+      invoice_terms_by_type: {
+        wedding: linesToTerms(terms_wedding), corporate: linesToTerms(terms_corporate), btl: linesToTerms(terms_btl),
+        exhibition: linesToTerms(terms_exhibition), manpower: linesToTerms(terms_manpower),
+      },
+      udyam_number: udyam_number ?? "",
+    };
     const { data, error } = await supabase.from("document_settings").update({
-      ...d, company_email: d.company_email ?? "", company_phone: d.company_phone ?? "", company_website: d.company_website ?? "", company_location: d.company_location ?? "",
+      ...d, ...termsPatch, company_email: d.company_email ?? "", company_phone: d.company_phone ?? "", company_website: d.company_website ?? "", company_location: d.company_location ?? "",
       bank_account_holder: d.bank_account_holder ?? "", bank_name: d.bank_name ?? "", bank_account_number: d.bank_account_number ?? "", bank_ifsc: d.bank_ifsc ?? "", bank_upi_id: d.bank_upi_id ?? "",
       invoice_payment_terms: d.invoice_payment_terms ?? "", invoice_notes: d.invoice_notes ?? "", gst_declaration: d.gst_declaration ?? "",
       quotation_terms: d.quotation_terms.filter((t) => t.trim()),

@@ -1,4 +1,5 @@
 import type { CalcConfig, CalcResult, InvoicePaymentStatus } from "./calc";
+import type { InvoiceTerms } from "./invoice-terms";
 
 /** Business identity printed on documents. Comes from document_settings (never hard-coded in templates). */
 export type CompanyInfo = {
@@ -75,6 +76,8 @@ export type InvoiceRender = {
   notes_text: string;
   /** Printed only when the invoice charges no GST and the company has enabled the declaration. */
   gst_declaration: string | null;
+  /** Terms & conditions as of issue (common block + event-type block). Absent on invoices issued before terms existed. */
+  terms?: InvoiceTerms;
   bank: BankDetails;
   company: CompanyInfo;
 };

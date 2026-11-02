@@ -9,10 +9,11 @@ import { FileCheck, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Field, FormSection, Input, Textarea } from "@/components/ui/form";
+import { Field, FormSection, Input, Select, Textarea } from "@/components/ui/form";
 import { Card } from "@/components/ui/layout";
 import { ClientSection, ConfigEditor, ItemsEditor, PreviewPane, SummaryPanel } from "@/components/documents/builder-parts";
 import { issueInvoice, previewDocument, saveInvoice } from "@/lib/actions/documents";
+import { TERMS_TYPES, TERMS_TYPE_HINTS, TERMS_TYPE_LABELS } from "@/lib/documents/invoice-terms";
 import type { LeadOption, Product } from "@/lib/documents/repo";
 import { invoiceInputSchema, type InvoiceFormValues, type InvoiceInput } from "@/lib/documents/schemas";
 import type { BankDetails } from "@/lib/documents/types";
@@ -144,6 +145,17 @@ export function InvoiceForm({
           <FormSection title="Payment terms & notes" description="Defaults come from Settings → Documents. The “GST has not been charged” declaration is added automatically only when no tax is charged.">
             <Field label="Payment terms" className="sm:col-span-2" error={errText(errors.payment_terms_text)}>{(p) => <Input {...p} {...register("payment_terms_text")} />}</Field>
             <Field label="Notes / declaration" className="sm:col-span-2" error={errText(errors.notes_text)}>{(p) => <Textarea {...p} {...register("notes_text")} rows={4} />}</Field>
+            <Field
+              label="Terms & conditions for" className="sm:col-span-2" error={errText(errors.terms_type)}
+              hint="The invoice prints NAFA's common terms plus the terms for this event type. Edit the wording in Settings → Documents. They are fixed onto the invoice when you issue it."
+            >
+              {(p) => (
+                <Select {...p} {...register("terms_type")}>
+                  <option value="">Common terms only</option>
+                  {TERMS_TYPES.map((t) => <option key={t} value={t}>{TERMS_TYPE_LABELS[t]} ({TERMS_TYPE_HINTS[t].split(",").slice(0, 2).join(",").toLowerCase()}…)</option>)}
+                </Select>
+              )}
+            </Field>
           </FormSection>
 
           <div className="flex flex-wrap items-center justify-end gap-2 pt-2">

@@ -45,6 +45,10 @@ export type Contact = {
   whatsapp: string | null;
   communication_notes: string | null;
   notes: string | null;
+  /** Present once the WhatsApp migration has been run. */
+  whatsapp_consent?: "unknown" | "opted_in" | "opted_out";
+  whatsapp_consent_at?: string | null;
+  whatsapp_consent_source?: string | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;

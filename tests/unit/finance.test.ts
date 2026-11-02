@@ -145,3 +145,30 @@ describe("event details from invoices", () => {
     expect(fromLead).toMatchObject({ name: "Roadshow", location: "Mall, Pune", start_date: "2027-03-01", category: "BTL Marketing", approved_value: "" });
   });
 });
+
+import { groupCostLines, type CostLine } from "@/lib/finance/calc";
+
+describe("groupCostLines (P&L expense detail)", () => {
+  const line = (o: Partial<CostLine> & { id: string; category_id: string; category_name: string; amount: number | string }): CostLine =>
+    ({ source: "expense", date: "2026-11-01", title: "Item", vendor: null, note: null, ...o });
+
+  it("groups by category, sorts biggest first, and totals exactly", () => {
+    const { groups, total } = groupCostLines([
+      line({ id: "1", category_id: "a", category_name: "AV", title: "LED wall", amount: "0.10" }),
+      line({ id: "2", category_id: "b", category_name: "Food", title: "Lunch", amount: 5000, date: "2026-11-03" }),
+      line({ id: "3", category_id: "a", category_name: "AV", title: "Sound", amount: "0.20", date: "2026-10-30" }),
+      line({ id: "4", category_id: "c", category_name: "Travel", title: "Cab", amount: 2500.5, source: "reimbursement" }),
+    ]);
+    expect(total).toBe(7500.8);
+    expect(groups.map((g) => g.category_name)).toEqual(["Food", "Travel", "AV"]);
+    const av = groups.find((g) => g.category_id === "a")!;
+    expect(av.total).toBe(0.3); // 0.1 + 0.2 with no floating-point drift
+    expect(av.lines.map((l) => l.title)).toEqual(["Sound", "LED wall"]); // by date
+    expect(groups[0].share_pct).toBe(66.66); // 5000 / 7500.80
+    expect(groups.reduce((a, g) => a + g.total, 0)).toBeCloseTo(total, 2);
+  });
+  it("handles nothing and bad amounts", () => {
+    expect(groupCostLines([])).toEqual({ groups: [], total: 0 });
+    expect(groupCostLines([line({ id: "1", category_id: "a", category_name: "AV", amount: "abc" })]).total).toBe(0);
+  });
+});

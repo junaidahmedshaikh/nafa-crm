@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { optDate, optEmail, optText, optUuid, reqText } from "@/lib/validation/common";
 import { DEFAULT_CALC_CONFIG, type CalcConfig } from "./calc";
+import { TERMS_TYPES } from "./invoice-terms";
 
 /** Required calendar date "YYYY-MM-DD". */
 const reqDate = (label: string) =>
@@ -146,6 +147,8 @@ export const invoiceInputSchema = z.object({
   items: z.array(itemSchema).max(200),
   payment_terms_text: optText(500),
   notes_text: optText(3000),
+  /** Which event-type block of terms is printed after the common terms ('' = common terms only). */
+  terms_type: z.enum(['', ...TERMS_TYPES]).default(''),
 });
 export type InvoiceInput = z.output<typeof invoiceInputSchema>;
 export type InvoiceFormValues = z.input<typeof invoiceInputSchema>;
@@ -243,6 +246,14 @@ export const documentSettingsSchema = z.object({
   invoice_notes: optText(3000),
   gst_declaration_enabled: z.boolean(),
   gst_declaration: optText(500),
+  // Invoice terms & conditions. Present only once the invoice-terms migration has been run; one clause per line.
+  udyam_number: optText(40),
+  terms_common: z.string().max(8000, "Too long").optional(),
+  terms_wedding: z.string().max(8000, "Too long").optional(),
+  terms_corporate: z.string().max(8000, "Too long").optional(),
+  terms_btl: z.string().max(8000, "Too long").optional(),
+  terms_exhibition: z.string().max(8000, "Too long").optional(),
+  terms_manpower: z.string().max(8000, "Too long").optional(),
 });
 export type DocumentSettingsValues = z.input<typeof documentSettingsSchema>;
 
