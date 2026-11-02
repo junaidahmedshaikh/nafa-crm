@@ -344,32 +344,6 @@ Run `supabase/migrations/20261102000001_theme_preference.sql` in the Supabase SQ
 * Printed documents (quotation, invoice and proposal PDFs and their previews) are paper and stay white in both themes.
 * Adding a colour: add it to both `:root` and `.dark`, expose it under `@theme inline`, and the contrast test will tell you if a text/background pair is too weak.
 
-## WhatsApp bulk messaging
-
-**WhatsApp → Templates / New campaign / Settings.** Personalised messages go only to people who agreed to receive them, through the official WhatsApp Business Platform. It runs in **dry-run mode** until an admin connects live sending, so you can rehearse a whole campaign first without messaging anyone.
-
-### Setup
-1. Run `supabase/migrations/20261104000001_whatsapp.sql` in the Supabase SQL editor (fresh projects: `setup-all.sql` already includes it). Until it is run, the WhatsApp pages show a "not set up" message and the contact form is unchanged.
-2. Rehearse: create a template, record consent for a few contacts, create a campaign and press Start. Nothing leaves the server in dry-run.
-3. Go live (later, Phase B): in Meta Business Manager verify the business, add a **dedicated** phone number, create the WhatsApp Business Account and get a permanent access token. Put `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` in the Vercel environment variables (optional `WHATSAPP_API_VERSION`, default `v21.0`), then an admin switches **Settings → Mode** to Live. Tokens are never stored in the database.
-
-### Why it will not get your number banned (and what it will not do)
-* **Official API only.** There is deliberately no WhatsApp Web automation: that breaks WhatsApp's terms and is what gets numbers banned.
-* **Consent first.** A contact can be messaged only when recorded as *Opted in*, with how consent was given (enforced in the database). Everyone else is skipped with the reason shown. An opt-out is sticky: only an admin can record a new opt-in.
-* **Approved templates.** Live campaigns use only templates WhatsApp has approved. Templates are checked against Meta's rules as you type (no placeholder at the start or end, no adjacent placeholders, length limits, link shorteners, shouting). Marketing templates must include an opt-out line (e.g. footer "Reply STOP to unsubscribe"). Editing an approved template sends it back to Draft.
-* **Throttled.** A rolling 24-hour daily limit (across all campaigns, default 250, your Meta tier), small batches, a pause between messages, and no repeat message to the same person within N days (default 3). Consent is re-checked at the moment each message is sent.
-* **Stops by itself.** The campaign pauses on account or template level errors from WhatsApp (rate limit, spam rate, account locked, template disabled, expired token), after 5 failures in a row, or when over 30% of 10+ attempts fail. Unsent messages stay queued.
-* **No double sends.** Messages are claimed atomically; two browser tabs cannot send the same message. A message stuck mid-send is marked failed for a person to check, never silently retried.
-
-### How sending runs
-The campaign page asks the server for one small batch at a time and shows live progress. **Keep the page open while it sends**; closing it simply stops, and "Continue sending" resumes. Campaigns larger than the daily limit pause at the limit; resume the next day.
-
-### Not built yet (Phase B / later)
-* Meta webhook: delivered / read statuses and automatic opt-out when someone replies STOP (`isOptOutText` is ready; until then record opt-outs on the contact).
-* Submitting templates to Meta from the CRM and syncing approval status (an admin records the status by hand for now).
-* Scheduled or unattended sending (needs a cron/queue worker), media/header/button templates, two-way inbox, contact CSV import with consent columns.
-* Costs on the page are an estimate from the rate you enter; check Meta's current rate card and verify the error-code list in `src/lib/whatsapp/limits.ts` when going live.
-
 ## Invoice terms & conditions
 
 Every invoice prints **common terms** (payment due date, pay only to the account/UPI on the invoice, GST, payment reference, 7-day discrepancy window, cheques, advances adjusted, Mumbai jurisdiction) plus the **terms for the invoice's event type**: weddings & social celebrations, corporate events, BTL activations & brand campaigns, exhibition stalls & fabrication, or manpower & staffing. Choose it on the invoice form (**Terms & conditions for**). Leave it on "Common terms only" for anything else. Quotation terms (cancellation, scope, venue rules) are separate and unchanged.

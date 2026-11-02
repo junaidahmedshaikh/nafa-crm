@@ -14,10 +14,9 @@ import type { DuplicateReport } from "@/lib/types";
 import { contactSchema, type ContactFormData, type ContactFormInput } from "@/lib/validation/schemas";
 
 export function ContactForm({
-  contactId, defaults, companies, countryCode, consentEnabled = false,
+  contactId, defaults, companies, countryCode,
 }: {
   contactId?: string;
-  consentEnabled?: boolean;
   defaults: ContactFormInput;
   companies: { id: string; name: string }[];
   countryCode: string;
@@ -67,22 +66,6 @@ export function ContactForm({
         </Field>
         <Field label="Notes" error={e("notes")} className="sm:col-span-2">{(p) => <Textarea {...p} {...register("notes")} rows={4} />}</Field>
       </FormSection>
-      {consentEnabled && (
-        <FormSection title="WhatsApp consent" description="Bulk WhatsApp messages go only to people who agreed to receive them. Record how and when they agreed.">
-          <Field label="Consent" error={e("whatsapp_consent")} hint="An opt-out is permanent: only an admin can record a new opt-in afterwards.">
-            {(p) => (
-              <Select {...p} {...register("whatsapp_consent")}>
-                <option value="unknown">Not recorded (will not be messaged)</option>
-                <option value="opted_in">Opted in</option>
-                <option value="opted_out">Opted out (never message)</option>
-              </Select>
-            )}
-          </Field>
-          <Field label="How consent was given" error={e("whatsapp_consent_source")} hint="Required for opt-in, e.g. “Signed form at Brand Expo, 12 Oct” or “Replied YES on WhatsApp”.">
-            {(p) => <Input {...p} {...register("whatsapp_consent_source")} />}
-          </Field>
-        </FormSection>
-      )}
       <div className="flex justify-end gap-2">
         <Link href={contactId ? `/contacts/${contactId}` : "/contacts"} className="inline-flex h-9 items-center rounded-md border border-border-strong bg-surface px-4 text-sm font-medium hover:bg-surface-muted">Cancel</Link>
         <Button type="submit" variant="primary" loading={pending}>{contactId ? "Save changes" : "Create contact"}</Button>

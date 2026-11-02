@@ -26,7 +26,6 @@ import {
   HandCoins,
   Store,
   TrendingUp,
-  MessageCircle,
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { NotificationBell } from "@/components/layout/notification-bell";
@@ -45,7 +44,6 @@ const NAV: NavItem[] = [
   { href: "/companies", label: "Companies", icon: Building2 },
   { href: "/contacts", label: "Contacts", icon: UserRound },
   { href: "/followups", label: "Follow-ups", icon: CalendarClock },
-  { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { section: "Documents" },
   { href: "/quotations", label: "Quotations", icon: FileText },
   { href: "/proposals", label: "Proposals", icon: Presentation },
