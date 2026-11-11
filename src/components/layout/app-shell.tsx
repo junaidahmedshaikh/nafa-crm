@@ -17,7 +17,18 @@ import {
   Plus,
   Presentation,
   ReceiptText,
+  Ban,
+  BarChart3,
+  MessageSquareReply,
+  Inbox,
+  LayoutTemplate,
+  Mail,
+  Users,
+  Megaphone,
+  Send,
   Settings,
+  SlidersHorizontal,
+  Sparkles,
   Target,
   UserRound,
   Wallet,
@@ -34,11 +45,19 @@ import type { ThemePreference } from "@/lib/theme";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; exact?: boolean } | { section: string };
+type NavItem =
+  | {
+      href: string;
+      label: string;
+      icon: React.ComponentType<{ className?: string }>;
+      exact?: boolean;
+    }
+  | { section: string };
 
 const NAV: NavItem[] = [
   { section: "Overview" },
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/ai-bdm", label: "AI BD Manager", icon: Sparkles },
   { section: "CRM" },
   { href: "/leads", label: "Leads", icon: Target },
   { href: "/companies", label: "Companies", icon: Building2 },
@@ -56,17 +75,71 @@ const NAV: NavItem[] = [
   { section: "Operations" },
   { href: "/products-services", label: "Products & Services", icon: Package },
   { href: "/payments", label: "Payments", icon: Wallet },
+  { section: "AI Email Marketing" },
+  {
+    href: "/email-marketing",
+    label: "Campaign Dashboard",
+    icon: Megaphone,
+    exact: true,
+  },
+  {
+    href: "/email-marketing/campaigns/new",
+    label: "Create Campaign",
+    icon: Send,
+    exact: true,
+  },
+  {
+    href: "/email-marketing/campaigns",
+    label: "All Campaigns",
+    icon: Mail,
+    exact: true,
+  },
+  { href: "/email-marketing/groups", label: "Recipient Groups", icon: Users },
+  {
+    href: "/email-marketing/templates",
+    label: "Email Templates",
+    icon: LayoutTemplate,
+  },
+  { href: "/email-marketing/outbox", label: "Outbox & Sent", icon: Inbox },
+  {
+    href: "/email-marketing/replies",
+    label: "Replies & Engagement",
+    icon: MessageSquareReply,
+  },
+  {
+    href: "/email-marketing/analytics",
+    label: "Email Analytics",
+    icon: BarChart3,
+  },
+  { href: "/email-marketing/suppressions", label: "Unsubscribed", icon: Ban },
+  {
+    href: "/email-marketing/settings",
+    label: "Email Settings",
+    icon: SlidersHorizontal,
+  },
   { section: "Administration" },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
+function NavLinks({
+  onNavigate,
+  collapsed,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   const pathname = usePathname();
   return (
     <nav aria-label="Main" className="flex flex-col gap-0.5 px-2.5">
       {NAV.map((item, idx) => {
         if ("section" in item) {
-          if (collapsed) return <div key={item.section} className="my-2 border-t border-nav-hover/60" />;
+          if (collapsed)
+            return (
+              <div
+                key={item.section}
+                className="my-2 border-t border-nav-hover/60"
+              />
+            );
           return (
             <p
               key={item.section}
@@ -80,7 +153,9 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
           );
         }
         const { href, label, icon: Icon, exact } = item;
-        const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+        const active = exact
+          ? pathname === href
+          : pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}
@@ -91,13 +166,23 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
             className={cn(
               "group relative flex h-9 items-center gap-3 rounded-md text-sm font-medium text-nav-muted transition-colors hover:bg-nav-hover hover:text-nav-foreground",
               collapsed ? "justify-center px-0" : "px-3",
-              active && "bg-nav-active text-nav-foreground font-semibold shadow-xs",
+              active &&
+                "bg-nav-active text-nav-foreground font-semibold shadow-xs",
             )}
           >
-            <Icon className={cn("h-4 w-4 shrink-0 transition-transform group-hover:scale-105", active ? "text-accent" : "text-nav-muted")} aria-hidden />
+            <Icon
+              className={cn(
+                "h-4 w-4 shrink-0 transition-transform group-hover:scale-105",
+                active ? "text-accent" : "text-nav-muted",
+              )}
+              aria-hidden
+            />
             {!collapsed && <span className="truncate">{label}</span>}
             {active && (
-              <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-accent" aria-hidden />
+              <span
+                className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-accent"
+                aria-hidden
+              />
             )}
           </Link>
         );
@@ -108,14 +193,27 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
 
 function Brand({ name, collapsed }: { name: string; collapsed?: boolean }) {
   return (
-    <Link href="/" className={cn("flex items-center gap-3 py-4 text-nav-foreground group transition-colors", collapsed ? "justify-center px-2" : "px-5")}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-sm font-bold text-accent-foreground shadow-xs group-hover:brightness-110" aria-hidden>
+    <Link
+      href="/"
+      className={cn(
+        "flex items-center gap-3 py-4 text-nav-foreground group transition-colors",
+        collapsed ? "justify-center px-2" : "px-5",
+      )}
+    >
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-sm font-bold text-accent-foreground shadow-xs group-hover:brightness-110"
+        aria-hidden
+      >
         N
       </span>
       {!collapsed && (
         <span className="leading-tight overflow-hidden min-w-0">
-          <span className="block text-sm font-semibold tracking-tight text-nav-foreground">NAFA Business OS</span>
-          <span className="block max-w-[11.5rem] truncate text-[11px] text-nav-muted font-normal">{name}</span>
+          <span className="block text-sm font-semibold tracking-tight text-nav-foreground">
+            NAFA Business OS
+          </span>
+          <span className="block max-w-[11.5rem] truncate text-[11px] text-nav-muted font-normal">
+            {name}
+          </span>
         </span>
       )}
     </Link>
@@ -152,18 +250,42 @@ const ROUTE_LABELS: Record<string, string> = {
 
 function Breadcrumb() {
   const pathname = usePathname();
-  const current = ROUTE_LABELS[pathname] || (pathname.startsWith("/projects/") ? "Project" : pathname.includes("/quotations/") ? "Quotation Details" : pathname.includes("/invoices/") ? "Invoice Details" : pathname.includes("/proposals/") ? "Proposal Details" : pathname.includes("/leads/") ? "Lead Details" : pathname.includes("/companies/") ? "Company Details" : pathname.includes("/contacts/") ? "Contact Details" : "NAFA Business OS");
+  const current =
+    ROUTE_LABELS[pathname] ||
+    (pathname.startsWith("/projects/")
+      ? "Project"
+      : pathname.includes("/quotations/")
+        ? "Quotation Details"
+        : pathname.includes("/invoices/")
+          ? "Invoice Details"
+          : pathname.includes("/proposals/")
+            ? "Proposal Details"
+            : pathname.includes("/leads/")
+              ? "Lead Details"
+              : pathname.includes("/companies/")
+                ? "Company Details"
+                : pathname.includes("/contacts/")
+                  ? "Contact Details"
+                  : "NAFA Business OS");
   return (
     <div className="flex items-center gap-2 text-xs text-muted font-medium">
       <span className="hidden sm:inline text-muted/70">NAFA</span>
-      <span className="hidden sm:inline text-muted/40" aria-hidden>/</span>
+      <span className="hidden sm:inline text-muted/40" aria-hidden>
+        /
+      </span>
       <span className="text-foreground font-semibold">{current}</span>
     </div>
   );
 }
 
 export function AppShell({
-  userName, userEmail, businessName, userId, isAdmin, theme, children,
+  userName,
+  userEmail,
+  businessName,
+  userId,
+  isAdmin,
+  theme,
+  children,
 }: {
   userName: string;
   userEmail: string;
@@ -217,7 +339,11 @@ export function AppShell({
             )}
           >
             {!collapsed && <span>Collapse sidebar</span>}
-            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
           </button>
           {!collapsed && (
             <p className="mt-2 text-center text-[10px] text-nav-muted/60 font-medium">
@@ -229,8 +355,16 @@ export function AppShell({
 
       {/* Mobile drawer */}
       {open && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setOpen(false)} />
+        <div
+          className="fixed inset-0 z-50 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation"
+        >
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+            onClick={() => setOpen(false)}
+          />
           <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-nav shadow-2xl">
             <button
               className="absolute right-3 top-4 rounded-md p-1.5 text-nav-muted hover:bg-nav-hover hover:text-nav-foreground transition-colors cursor-pointer"
@@ -244,7 +378,9 @@ export function AppShell({
               <NavLinks onNavigate={() => setOpen(false)} />
             </div>
             <div className="border-t border-nav-hover/60 p-4">
-              <p className="text-center text-[11px] text-nav-muted font-medium">NAFA Events &amp; Activations</p>
+              <p className="text-center text-[11px] text-nav-muted font-medium">
+                NAFA Events &amp; Activations
+              </p>
             </div>
           </aside>
         </div>
@@ -276,12 +412,20 @@ export function AppShell({
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 <span>Create</span>
-                <ChevronDown className={cn("h-3 w-3 text-nav-muted transition-transform", createOpen && "rotate-180")} aria-hidden />
+                <ChevronDown
+                  className={cn(
+                    "h-3 w-3 text-nav-muted transition-transform",
+                    createOpen && "rotate-180",
+                  )}
+                  aria-hidden
+                />
               </button>
 
               {createOpen && (
                 <div className="absolute right-0 mt-1.5 w-48 rounded-lg border border-border bg-surface p-1.5 shadow-lg z-40">
-                  <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">Quick Actions</p>
+                  <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Quick Actions
+                  </p>
                   <Link
                     href="/leads/new"
                     onClick={() => setCreateOpen(false)}
@@ -333,8 +477,12 @@ export function AppShell({
               {userMenuOpen && (
                 <div className="absolute right-0 mt-1.5 w-60 rounded-lg border border-border bg-surface p-1 shadow-xl z-40">
                   <div className="border-b border-border px-3 py-2.5">
-                    <p className="truncate text-sm font-semibold text-foreground">{userName}</p>
-                    <p className="truncate text-xs text-muted font-normal">{userEmail}</p>
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {userName}
+                    </p>
+                    <p className="truncate text-xs text-muted font-normal">
+                      {userEmail}
+                    </p>
                   </div>
                   <div className="py-1">
                     <Link
@@ -342,7 +490,10 @@ export function AppShell({
                       onClick={() => setUserMenuOpen(false)}
                       className="flex h-8.5 items-center gap-2.5 rounded-md px-2.5 text-xs font-medium text-foreground hover:bg-surface-muted transition-colors"
                     >
-                      <Settings className="h-3.5 w-3.5 text-muted" aria-hidden />
+                      <Settings
+                        className="h-3.5 w-3.5 text-muted"
+                        aria-hidden
+                      />
                       <span>Settings &amp; Business Info</span>
                     </Link>
                     <Link
@@ -350,12 +501,17 @@ export function AppShell({
                       onClick={() => setUserMenuOpen(false)}
                       className="flex h-8.5 items-center gap-2.5 rounded-md px-2.5 text-xs font-medium text-foreground hover:bg-surface-muted transition-colors"
                     >
-                      <ReceiptText className="h-3.5 w-3.5 text-muted" aria-hidden />
+                      <ReceiptText
+                        className="h-3.5 w-3.5 text-muted"
+                        aria-hidden
+                      />
                       <span>Document &amp; Bank Settings</span>
                     </Link>
                   </div>
                   <div className="border-t border-border px-2.5 py-2">
-                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">Appearance</p>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                      Appearance
+                    </p>
                     <ThemeToggle initial={theme} compact />
                   </div>
                   <div className="border-t border-border pt-1">
@@ -375,7 +531,10 @@ export function AppShell({
           </div>
         </header>
 
-        <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main
+          id="main"
+          className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8"
+        >
           {children}
         </main>
       </div>

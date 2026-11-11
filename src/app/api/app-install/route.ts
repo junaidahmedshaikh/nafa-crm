@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { sendAlertEmail } from "@/lib/notifications/email";
+import { sendPushToUsers } from "@/lib/push";
 
 const bodySchema = z.object({
   device_id: z.string().min(16).max(64),
@@ -33,6 +34,11 @@ export async function POST(request: Request) {
     // Best effort: a failed email never fails the installation record.
     const sent = await sendAlertEmail({ to: r.email_to, subject: "New CRM App Installation", text: `${r.message}\n\nOpen NAFA Business OS → Settings → App installations for details.` });
     if (!sent.ok) console.error("[app-install email]", sent.error);
+  }
+  if (r.created && r.message) {
+    // Best effort: also push the alert to administrators' installed apps.
+    const admin = (await supabase.from("profiles").select("id").eq("role", "admin").eq("is_active", true)).data ?? [];
+    await sendPushToUsers(admin.map((a: { id: string }) => a.id), { title: "New CRM App Installation", body: r.message, url: "/settings/app-installs", tag: "install" });
   }
   return NextResponse.json({ ok: true, recorded: r.recorded, created: !!r.created });
 }

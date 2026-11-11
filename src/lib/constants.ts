@@ -68,7 +68,7 @@ export const FOLLOW_UP_STATUS_LABELS: Record<FollowUpStatus, string> = {
 export const ACTIVITY_TYPES = [
   "created", "updated", "status_changed", "won", "lost", "note",
   "follow_up_scheduled", "follow_up_completed", "follow_up_rescheduled", "follow_up_cancelled",
-  "archived", "restored",
+  "archived", "restored", "reply_received", "message_sent",
 ] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 

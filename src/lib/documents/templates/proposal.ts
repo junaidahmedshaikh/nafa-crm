@@ -127,7 +127,7 @@ function sectionHtml(d: ProposalRender, s: ProposalSectionRender, n: number): st
 <div><div class="who">${esc(d.company.signatory_label)}</div><div class="line"></div><div class="cap">Name &amp; designation</div><div class="line"></div><div class="cap">Signature &amp; date</div></div></div>`;
   }
   if (s.images.length) {
-    inner += `<div class="imgs">${s.images.map((im) => `<figure><img src="${im.data_uri}" alt="${esc(im.caption)}">${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ""}</figure>`).join("")}</div>`;
+    inner += `<div class="imgs">${s.images.filter((im) => /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(im.data_uri)).map((im) => `<figure><img src="${im.data_uri}" alt="${esc(im.caption)}">${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ""}</figure>`).join("")}</div>`;
   }
   if (!inner) return "";
   return `<section class="sec"><h2><span class="num">${String(n).padStart(2, "0")}</span>${esc(s.title)}</h2>${inner}</section>`;

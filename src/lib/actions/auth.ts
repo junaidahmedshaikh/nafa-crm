@@ -7,6 +7,9 @@ import { safeNextPath } from "@/lib/safe-redirect";
 import { cookies } from "next/headers";
 import { THEME_COOKIE } from "@/lib/theme";
 import { getThemePreference } from "@/lib/theme-server";
+import { headers } from "next/headers";
+import { createHash } from "node:crypto";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email address").max(254),
@@ -19,6 +22,16 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   const parsed = loginSchema.safeParse({ email: String(formData.get("email") ?? "").trim(), password: String(formData.get("password") ?? "") });
   const email = String(formData.get("email") ?? "");
   if (!parsed.success) return { error: parsed.error.issues[0].message, email };
+
+  // Brute-force protection: per client address and per account (hashed, so the e-mail is never stored in the limiter).
+  const h = await headers();
+  const ip = (h.get("x-forwarded-for") ?? "unknown").split(",")[0].trim().slice(0, 64);
+  const acct = createHash("sha256").update(parsed.data.email.toLowerCase()).digest("hex").slice(0, 32);
+  const [okIp, okAcct] = await Promise.all([
+    rateLimit(`login:ip:${ip}`, LIMITS.loginIp.max, LIMITS.loginIp.window),
+    rateLimit(`login:acct:${acct}`, LIMITS.loginEmail.max, LIMITS.loginEmail.window),
+  ]);
+  if (!okIp || !okAcct) return { error: "Too many sign-in attempts. Please wait 15 minutes and try again.", email };
 
   const supabase = await createClient();
   const { data: signedIn, error } = await supabase.auth.signInWithPassword(parsed.data);

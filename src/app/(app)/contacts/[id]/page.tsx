@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DeleteContactButton } from "@/components/directory/delete-contact-button";
+import { ContactGroups } from "@/components/email/contact-groups";
 import { ArchiveButton } from "@/components/directory/archive-button";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { Card, CardHeader, DataTable, DetailList, EmptyState, PageHeader, Td, Th } from "@/components/ui/layout";
 import { requireMember } from "@/lib/auth";
 import { getContact } from "@/lib/data/directory";
+import { contactGroupIds, listAssignableGroups } from "@/lib/data/groups";
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import { formatINR, formatLeadNumber } from "@/lib/format";
 
@@ -13,10 +16,11 @@ export const metadata = { title: "Contact" };
 
 export default async function ContactDetailPage({ params }: PageProps<"/contacts/[id]">) {
   const { id } = await params;
-  const { supabase } = await requireMember();
+  const { supabase, profile } = await requireMember();
   const data = await getContact(supabase, id);
   if (!data) notFound();
   const { contact: c, leads } = data;
+  const [groups, groupIds] = await Promise.all([listAssignableGroups(supabase), contactGroupIds(supabase, id)]);
 
   return (
     <>
@@ -28,6 +32,7 @@ export default async function ContactDetailPage({ params }: PageProps<"/contacts
           <>
             {c.archived_at && <Badge>Archived {formatDate(c.archived_at)}</Badge>}
             <LinkButton href={`/contacts/${c.id}/edit`}>Edit</LinkButton>
+            {profile.role === "admin" && <DeleteContactButton id={c.id} name={c.full_name} leadCount={leads.length} />}
             <ArchiveButton kind="contact" id={c.id} name={c.full_name} archived={!!c.archived_at} />
           </>
         }
@@ -79,6 +84,10 @@ export default async function ContactDetailPage({ params }: PageProps<"/contacts
               <p className="mt-1 whitespace-pre-wrap text-sm">{c.notes || <span className="text-muted">No notes.</span>}</p>
             </div>
           </div>
+        </Card>
+        <Card className="xl:col-span-3">
+          <CardHeader title="Recipient groups" />
+          <ContactGroups contactId={c.id} groups={groups} initial={groupIds} />
         </Card>
       </div>
     </>

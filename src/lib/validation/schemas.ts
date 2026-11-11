@@ -85,6 +85,12 @@ export const contactSchema = (cc = "+91") =>
     whatsapp: optPhone(cc),
     communication_notes: optText(1000),
     notes: optText(5000),
+    group_ids: z.array(z.string().uuid()).max(100).default([]),
+    categories: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
+    // Filled when a company is typed that does not exist yet: it is created together with the contact.
+    new_company_name: optText(200),
+    new_company_industry: optText(120),
+    new_company_city: optText(120),
   });
 export type ContactFormInput = z.input<ReturnType<typeof contactSchema>>;
 export type ContactFormData = z.output<ReturnType<typeof contactSchema>>;

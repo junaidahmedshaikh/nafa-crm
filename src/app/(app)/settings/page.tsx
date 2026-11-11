@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BusinessSettingsForm, ProfileForm } from "@/components/settings/settings-forms";
 import { InstallCard } from "@/components/pwa/install-card";
+import { PushToggle } from "@/components/pwa/push-toggle";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { PageHeader } from "@/components/ui/layout";
 import { getSettings, requireMember } from "@/lib/auth";
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
           <ThemeToggle initial={theme} />
         </div>
         <InstallCard />
+        <PushToggle publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null} />
         {profile.role === "admin" && (
           <Link href="/settings/app-installs" className="block rounded-lg border border-border bg-surface p-4 hover:bg-surface-muted"><p className="text-sm font-semibold">App installations →</p><p className="text-xs text-muted">Who installed the CRM app, on which device, plus alert preferences.</p></Link>
         )}

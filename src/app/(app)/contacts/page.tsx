@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { Plus, Search, UserRound } from "lucide-react";
+import { Plus, Search, Upload, UserRound } from "lucide-react";
 import { ExportLink } from "@/components/shared/export-link";
 import { FilterForm } from "@/components/shared/filter-form";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
-import { Card, DataTable, EmptyState, PageHeader, Pagination, Td, Th } from "@/components/ui/layout";
+import { Card, EmptyState, PageHeader, Pagination } from "@/components/ui/layout";
 import { requireMember } from "@/lib/auth";
+import { ContactsTable } from "@/components/directory/contacts-table";
 import { listContacts } from "@/lib/data/directory";
+import { listAssignableGroups } from "@/lib/data/groups";
 
 export const metadata = { title: "Contacts" };
 
@@ -16,8 +18,8 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
   const q = one(sp.q).trim().slice(0, 100);
   const page = Math.max(1, Math.floor(Number(one(sp.page))) || 1);
   const archived = one(sp.archived) === "1";
-  const { supabase } = await requireMember();
-  const { rows, total, pageSize } = await listContacts(supabase, { q, page, archived });
+  const { supabase, profile } = await requireMember();
+  const [{ rows, total, pageSize }, groups] = await Promise.all([listContacts(supabase, { q, page, archived }), listAssignableGroups(supabase)]);
   const href = (p: number) => {
     const params = new URLSearchParams({ page: String(p) });
     if (q) params.set("q", q);
@@ -32,6 +34,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
         description={`${total} ${archived ? "archived" : q ? "matching" : "total"}`}
         actions={
           <>
+            <LinkButton href="/contacts/import"><Upload className="h-4 w-4" aria-hidden />Import</LinkButton>
             <ExportLink href="/api/export/contacts" />
             <LinkButton href="/contacts/new" variant="primary"><Plus className="h-4 w-4" aria-hidden />New contact</LinkButton>
           </>
@@ -55,29 +58,11 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
             icon={UserRound}
             title={q ? "No contacts match" : archived ? "No archived contacts" : "No contacts yet"}
             description={q ? "Try a different search." : "Contacts are created automatically when you add leads, or you can add one here."}
-            action={!q && !archived ? <LinkButton href="/contacts/new" variant="primary">Add a contact</LinkButton> : undefined}
+            action={!q && !archived ? <div className="flex gap-2"><LinkButton href="/contacts/new" variant="primary">Add a contact</LinkButton><LinkButton href="/contacts/import">Import from CSV</LinkButton></div> : undefined}
           />
         ) : (
           <>
-            <DataTable>
-              <thead>
-                <tr><Th>Name</Th><Th>Company</Th><Th>Email</Th><Th>Phone</Th><Th className="text-right">Leads</Th></tr>
-              </thead>
-              <tbody>
-                {rows.map((c) => (
-                  <tr key={c.id} className="hover:bg-surface-muted">
-                    <Td>
-                      <Link href={`/contacts/${c.id}`} className="font-medium hover:text-accent hover:underline">{c.full_name}</Link>
-                      {c.designation && <p className="text-xs text-muted">{c.designation}</p>}
-                    </Td>
-                    <Td>{c.company_id ? <Link href={`/companies/${c.company_id}`} className="hover:underline">{c.company_name}</Link> : "—"}</Td>
-                    <Td>{c.email ?? "—"}</Td>
-                    <Td className="whitespace-nowrap">{c.phone ?? "—"}</Td>
-                    <Td className="text-right tabular-nums">{c.lead_count}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTable>
+            <ContactsTable rows={rows} total={total} q={q} archived={archived} groups={groups} isAdmin={profile.role === "admin"} />
             <Pagination page={page} pageSize={pageSize} total={total} hrefFor={href} />
           </>
         )}

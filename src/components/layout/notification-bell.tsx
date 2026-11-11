@@ -96,7 +96,7 @@ export function NotificationBell({ userId, isAdmin }: { userId: string; isAdmin:
           <ul className="max-h-96 divide-y divide-border overflow-y-auto">
             {items.length === 0 && <li className="px-4 py-8 text-center text-sm text-muted">You&apos;re all caught up.</li>}
             {items.map((n) => {
-              const d = n.data as { platform?: Platform; browser?: string; user_email?: string; installed_at?: string; first_launch_at?: string | null };
+              const d = n.data as { url?: string; platform?: Platform; browser?: string; user_email?: string; installed_at?: string; first_launch_at?: string | null };
               const isInstall = n.type === "app_install";
               const body = (
                 <div className="flex gap-3">
@@ -125,6 +125,10 @@ export function NotificationBell({ userId, isAdmin }: { userId: string; isAdmin:
                 <li key={n.id}>
                   {isInstall && isAdmin ? (
                     <Link href="/settings/app-installs" onClick={() => setOpen(false)} className="block px-4 py-3 hover:bg-surface-muted">
+                      {body}
+                    </Link>
+                  ) : d.url && d.url.startsWith("/") ? (
+                    <Link href={d.url} onClick={() => setOpen(false)} className="block px-4 py-3 hover:bg-surface-muted">
                       {body}
                     </Link>
                   ) : (

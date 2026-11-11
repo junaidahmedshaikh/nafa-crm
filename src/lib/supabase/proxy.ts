@@ -29,7 +29,9 @@ export async function updateSession(request: NextRequest) {
 
   // getUser() validates the token with the Auth server (getSession() would trust the cookie).
   const { data } = await supabase.auth.getUser();
-  const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname === p);
+  // /unsubscribe/* is the public opt-out page (needs an unguessable token). /api/cron/* is called by the scheduler without a session; each handler authenticates with CRON_SECRET itself.
+  const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname === p) || request.nextUrl.pathname.startsWith("/api/cron/")
+    || request.nextUrl.pathname.startsWith("/unsubscribe/") || request.nextUrl.pathname.startsWith("/api/unsubscribe/") || request.nextUrl.pathname === "/api/webhooks/resend";
 
   if (!data.user && !isPublic) {
     const loginUrl = request.nextUrl.clone();

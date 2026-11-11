@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   // Fonts/logo are read from disk by the PDF templates; make sure serverless bundles include them.
   // The PDF engine needs files the file tracer cannot see: playwright-core reads browsers.json / package.json /
   // help.json at load time, and @sparticuz/chromium unpacks its brotli archives from its bin/ folder. Name them for
@@ -33,6 +34,9 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+          // Not a full script policy (Next injects inline scripts); these directives are safe and block framing, plugins and form hijacking.
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'" },
         ],
       },
     ];

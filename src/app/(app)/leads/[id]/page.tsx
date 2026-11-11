@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarClock, Mail, MessageCircle, Phone } from "lucide-react";
 import { FollowUpActions } from "@/components/followups/followup-actions";
+import { LogCommunication } from "@/components/bdm/bdm-controls";
 import { LeadActions } from "@/components/leads/lead-actions";
 import { Badge, PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Card, CardHeader, DetailList, EmptyState, PageHeader } from "@/components/ui/layout";
@@ -43,6 +44,9 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
           <Link href={`/proposals/new?lead=${lead.id}`} className="inline-flex h-9 items-center rounded-md border border-border-strong bg-surface px-3 text-sm font-medium hover:bg-surface-muted">+ Proposal</Link>
           <Link href={`/invoices/new?lead=${lead.id}`} className="inline-flex h-9 items-center rounded-md border border-border-strong bg-surface px-3 text-sm font-medium hover:bg-surface-muted">+ Invoice</Link>
         </div>
+        {!lead.archived_at && lead.status !== "won" && lead.status !== "lost" && (
+          <div className="flex flex-wrap items-center gap-2"><LogCommunication leadId={lead.id} /></div>
+        )}
         <div className="w-full sm:w-auto">
           <LeadActions
             lead={{ id: lead.id, title: lead.title, status: lead.status, archived: !!lead.archived_at, contactName: lead.contact_name }}

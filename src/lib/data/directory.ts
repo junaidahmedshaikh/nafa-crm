@@ -47,6 +47,22 @@ export async function listContacts(
   return { rows: (data ?? []) as ContactRow[], total: count ?? 0, pageSize: PAGE_SIZE };
 }
 
+/** Ids of every contact matching the Contacts-page search (for "select all N results" bulk actions). */
+export async function contactIdsMatching(supabase: SupabaseClient, opts: { q: string; archived: boolean }, max: number): Promise<string[]> {
+  let query = supabase.from("contact_list").select("id");
+  query = opts.archived ? query.not("archived_at", "is", null) : query.is("archived_at", null);
+  const s = sanitizeSearch(opts.q);
+  if (s) {
+    const digits = s.replace(/\D/g, "");
+    const parts = [`full_name.ilike.%${s}%`, `email.ilike.%${s}%`, `designation.ilike.%${s}%`, `company_name.ilike.%${s}%`, `phone.ilike.%${s}%`];
+    if (digits.length >= 3) parts.push(`phone_normalized.ilike.%${digits}%`);
+    query = query.or(parts.join(","));
+  }
+  const { data, error } = await query.order("full_name").limit(max);
+  if (error) throw new Error(`Could not load contacts: ${error.message}`);
+  return (data ?? []).map((r: { id: string }) => r.id);
+}
+
 export async function getContact(supabase: SupabaseClient, id: string) {
   if (!isUuid(id)) return null;
   const { data: contact } = await supabase.from("contact_list").select("*").eq("id", id).maybeSingle();

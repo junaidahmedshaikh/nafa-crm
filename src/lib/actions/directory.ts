@@ -1,5 +1,6 @@
 "use server";
 
+import { syncContactGroups } from "@/lib/email/group-sync";
 import { authorized, getSettings } from "@/lib/auth";
 import {
   companyMatchToDuplicate, contactMatchToDuplicate, emptyReport, findCompanyMatches, findContactMatches, hasDuplicates,
@@ -72,16 +73,29 @@ export async function saveContact(
         }
       }
     }
+    const { group_ids, new_company_name, new_company_industry, new_company_city, ...contactData } = parsed.data;
+    contactData.categories = [...new Set(contactData.categories.map((c) => c.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")).filter(Boolean))];
+    if (!contactData.company_id && new_company_name) {
+      const { data: found } = await supabase.from("companies").select("id").ilike("name", new_company_name.replace(/[%_]/g, "")).is("archived_at", null).limit(1);
+      if (found?.length) contactData.company_id = found[0].id;
+      else {
+        const { data: created, error: cErr } = await supabase.from("companies").insert({ name: new_company_name, industry: new_company_industry, city: new_company_city }).select("id").single();
+        if (cErr || !created) return fail("Could not create the new company. Please try again.");
+        contactData.company_id = created.id;
+      }
+    }
     if (opts.id) {
-      const { data, error } = await supabase.from("contacts").update(parsed.data).eq("id", opts.id).select("id").maybeSingle();
+      const { data, error } = await supabase.from("contacts").update(contactData).eq("id", opts.id).select("id").maybeSingle();
       if (error) return fail(friendlyDbError(error));
       if (!data) return fail("This contact no longer exists.");
-      refresh(["/contacts", `/contacts/${opts.id}`, "/leads"]);
+      await syncContactGroups(supabase, opts.id, group_ids);
+      refresh(["/contacts", `/contacts/${opts.id}`, "/leads", "/email-marketing/groups"]);
       return { ok: true, data: { id: opts.id } };
     }
-    const { data, error } = await supabase.from("contacts").insert(parsed.data).select("id").single();
+    const { data, error } = await supabase.from("contacts").insert(contactData).select("id").single();
     if (error) return fail(friendlyDbError(error));
-    refresh(["/contacts", "/companies"]);
+    if (group_ids.length) await syncContactGroups(supabase, data.id, group_ids);
+    refresh(["/contacts", "/companies", "/email-marketing/groups"]);
     return { ok: true, data: { id: data.id } };
   });
 }
