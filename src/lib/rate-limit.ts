@@ -29,7 +29,7 @@ export const LIMITS = {
   chat: { max: 25, window: 600 },
   testEmail: { max: 10, window: 3600 },    // e-mail test sends per user per hour
   replyEmail: { max: 40, window: 3600 },
-  import: { max: 10, window: 3600 },
+  import: { max: 60, window: 3600 },   // one file is sent in several batches
   heavy: { max: 60, window: 3600 },        // recipient rebuilds / mailbox checks
   loginIp: { max: 30, window: 900 },
   loginEmail: { max: 8, window: 900 },

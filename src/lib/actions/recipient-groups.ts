@@ -321,27 +321,95 @@ export async function searchContactsForCampaign(q: string): Promise<ActionResult
 }
 
 // ------------------------------------------------------------------------------------------ CSV import with group mapping
+/** Spreadsheet cells are messy: trim them and cut over-long values instead of rejecting the whole batch. */
+const cell = (max: number) => z.string().nullish().transform((v) => (v ?? "").trim().slice(0, max));
 const importSchema = z.object({
   rows: z.array(z.object({
-    full_name: z.string().trim().max(200), email: z.string().trim().max(254), company: z.string().trim().max(200).optional(),
-    designation: z.string().trim().max(120).optional(), industry: z.string().trim().max(120).optional(), city: z.string().trim().max(120).optional(),
-    state: z.string().trim().max(120).optional(), website: z.string().trim().max(200).optional(), category: z.string().trim().max(60).optional(),
-    groups: z.string().trim().max(500).optional(),     // group names separated by ; or |
-    phone: z.string().trim().max(40).optional(),
+    full_name: cell(200), email: cell(320), company: cell(200), designation: cell(120), industry: cell(120), city: cell(120),
+    state: cell(120), website: cell(200), category: cell(60),
+    groups: cell(500),     // group names separated by ; or |
+    phone: cell(40),
   })).min(1).max(2000),
   category: z.string().trim().max(60).optional(),
   groupIds: z.array(z.string().uuid()).max(50).default([]),   // applied to every row
 });
-/** Imports contacts and assigns groups. Existing contacts (same email) are NOT duplicated — they just get the groups. Missing named groups are created as static groups. */
+/**
+ * Imports contacts and assigns groups, in a handful of batched queries (not one round trip per row), so a few hundred rows finish in seconds.
+ * Existing contacts (same email) are NOT duplicated: they just get the groups. Missing named groups are created as static groups.
+ */
 export async function importContactsWithGroups(input: z.input<typeof importSchema>): Promise<ActionResult<{ created: number; existing: number; invalid: number; assigned: number; groupsCreated: number }>> {
   return authorized(async ({ supabase, user }) => {
     if (!(await limitUser(user.id, "import"))) return fail(TOO_MANY);
     const p = importSchema.safeParse(input);
-    if (!p.success) return fail("Upload a CSV with up to 2,000 rows.");
+    if (!p.success) {
+      const i = p.error.issues[0];
+      return fail(i?.path[0] === "rows" && typeof i.path[1] === "number" ? `Row ${i.path[1] + 1} could not be read (${String(i.path[2] ?? "value")}).` : "Upload a CSV with between 1 and 2,000 rows.");
+    }
+
+    // ---- validate + de-duplicate inside the file
+    type Valid = (typeof p.data.rows)[number] & { n: string };
+    const valid: Valid[] = [];
+    const seen = new Set<string>();
+    let invalid = 0, existing = 0;
+    for (const r of p.data.rows) {
+      if (!isValidEmail(r.email) || !r.full_name) { invalid++; continue; }
+      const n = normalizeEmail(r.email);
+      if (seen.has(n)) { existing++; continue; }
+      seen.add(n);
+      valid.push({ ...r, n });
+    }
+
+    // ---- which of these people already exist?
+    const contactIdByEmail = new Map<string, string>();
+    for (let i = 0; i < valid.length; i += 100) {
+      const { data } = await supabase.from("contacts").select("id, email_normalized").in("email_normalized", valid.slice(i, i + 100).map((v) => v.n));
+      for (const c of data ?? []) contactIdByEmail.set(c.email_normalized as string, c.id as string);
+    }
+    existing += valid.filter((v) => contactIdByEmail.has(v.n)).length;
+    const fresh = valid.filter((v) => !contactIdByEmail.has(v.n));
+
+    // ---- companies: reuse by name (case-insensitive), create the missing ones in bulk
+    const companyId = new Map<string, string>();
+    const { data: comps } = await supabase.from("companies").select("id, name").is("archived_at", null).limit(10000);
+    for (const c of comps ?? []) companyId.set((c.name as string).trim().toLowerCase(), c.id as string);
+    const newCompanies = new Map<string, { name: string; industry: string | null; city: string | null; website: string | null }>();
+    for (const r of fresh) {
+      const key = r.company?.trim().toLowerCase();
+      if (key && !companyId.has(key) && !newCompanies.has(key)) newCompanies.set(key, { name: r.company!.trim(), industry: r.industry || null, city: r.city || null, website: r.website || null });
+    }
+    const toCreate = [...newCompanies.values()];
+    for (let i = 0; i < toCreate.length; i += 100) {
+      const { data } = await supabase.from("companies").insert(toCreate.slice(i, i + 100)).select("id, name");
+      for (const c of data ?? []) companyId.set((c.name as string).trim().toLowerCase(), c.id as string);
+    }
+
+    // ---- contacts: bulk insert; if a chunk is rejected, retry row by row so one bad row cannot sink the rest
+    const record = (r: Valid) => ({
+      full_name: r.full_name, email: r.email, phone: r.phone || null, designation: r.designation || null,
+      company_id: r.company ? companyId.get(r.company.trim().toLowerCase()) ?? null : null, state: r.state || null,
+      categories: [r.category || p.data.category].filter(Boolean) as string[],
+    });
+    let created = 0;
+    for (let i = 0; i < fresh.length; i += 100) {
+      const chunk = fresh.slice(i, i + 100);
+      const { data, error } = await supabase.from("contacts").insert(chunk.map(record)).select("id, email_normalized");
+      if (!error) {
+        for (const c of data ?? []) contactIdByEmail.set(c.email_normalized as string, c.id as string);
+        created += data?.length ?? 0;
+        continue;
+      }
+      for (const r of chunk) {
+        const one = await supabase.from("contacts").insert(record(r)).select("id, email_normalized").single();
+        if (one.error || !one.data) invalid++;
+        else { contactIdByEmail.set(one.data.email_normalized as string, one.data.id as string); created++; }
+      }
+    }
+
+    // ---- groups
     const groupByName = new Map<string, string>();
     const { data: existingGroups } = await supabase.from("recipient_groups").select("id, name, group_type");
-    for (const g of existingGroups ?? []) if (g.group_type === "static") groupByName.set(g.name.trim().toLowerCase(), g.id);
-    const dynamicNames = new Set((existingGroups ?? []).filter((g) => g.group_type === "dynamic").map((g) => g.name.trim().toLowerCase()));
+    for (const g of existingGroups ?? []) if (g.group_type === "static") groupByName.set((g.name as string).trim().toLowerCase(), g.id as string);
+    const dynamicNames = new Set((existingGroups ?? []).filter((g) => g.group_type === "dynamic").map((g) => (g.name as string).trim().toLowerCase()));
     let groupsCreated = 0;
     const ensureGroup = async (name: string): Promise<string | null> => {
       const key = name.trim().toLowerCase();
@@ -352,41 +420,14 @@ export async function importContactsWithGroups(input: z.input<typeof importSchem
       if (data) { groupByName.set(key, data.id); groupsCreated++; return data.id; }
       return null;
     };
-    const wanted = new Map<string, Set<string>>();           // contact id -> group ids
-    let created = 0, existing = 0, invalid = 0;
-    const seen = new Set<string>();
-    const companyIds = new Map<string, string>();
-    for (const r of p.data.rows) {
-      if (!isValidEmail(r.email) || !r.full_name) { invalid++; continue; }
-      const n = normalizeEmail(r.email);
-      if (seen.has(n)) { existing++; continue; }
-      seen.add(n);
-      const { data: ex } = await supabase.from("contacts").select("id").eq("email_normalized", n).limit(1);
-      let contactId = ex?.[0]?.id as string | undefined;
-      if (contactId) existing++;
-      else {
-        let companyId: string | null = null;
-        if (r.company) {
-          const key = r.company.toLowerCase();
-          companyId = companyIds.get(key) ?? null;
-          if (!companyId) {
-            const { data: c } = await supabase.from("companies").select("id").ilike("name", r.company.replace(/[%_]/g, "")).is("archived_at", null).limit(1);
-            if (c?.length) companyId = c[0].id;
-            else { const { data: nc } = await supabase.from("companies").insert({ name: r.company, industry: r.industry || null, city: r.city || null, website: r.website || null }).select("id").single(); companyId = nc?.id ?? null; }
-            if (companyId) companyIds.set(key, companyId);
-          }
-        }
-        const cats = [r.category || p.data.category].filter(Boolean) as string[];
-        const { data: nc, error } = await supabase.from("contacts").insert({ full_name: r.full_name, email: r.email, phone: r.phone || null, designation: r.designation || null, company_id: companyId, state: r.state || null, categories: cats }).select("id").single();
-        if (error || !nc) { invalid++; continue; }
-        contactId = nc.id; created++;
-      }
-      const set = wanted.get(contactId!) ?? new Set<string>();
-      for (const g of p.data.groupIds) set.add(g);
-      for (const name of (r.groups ?? "").split(/[;|]/)) { const gid = await ensureGroup(name); if (gid) set.add(gid); }
-      if (set.size) wanted.set(contactId!, set);
+    const pairs: { contact_id: string; group_id: string }[] = [];
+    for (const r of valid) {
+      const cid = contactIdByEmail.get(r.n);
+      if (!cid) continue;
+      const ids = new Set<string>(p.data.groupIds);
+      for (const name of (r.groups ?? "").split(/[;|]/)) { const gid = await ensureGroup(name); if (gid) ids.add(gid); }
+      for (const gid of ids) pairs.push({ contact_id: cid, group_id: gid });
     }
-    const pairs = [...wanted].flatMap(([contact_id, set]) => [...set].map((group_id) => ({ contact_id, group_id })));
     let assigned = 0;
     for (let i = 0; i < pairs.length; i += 500) {
       const { data } = await supabase.from("contact_recipient_groups").upsert(pairs.slice(i, i + 500), { onConflict: "contact_id,group_id", ignoreDuplicates: true }).select("id");

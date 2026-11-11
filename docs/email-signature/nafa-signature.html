@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>NAFA email signature</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:Arial,Helvetica,sans-serif;margin:32px;color:#222}button{font-size:14px;padding:8px 16px;cursor:pointer}.box{border:1px dashed #bbb;padding:16px;display:inline-block;background:#fff;margin:16px 0}</style></head>
+<body>
+<h2 style="margin:0 0 4px">NAFA email signature</h2>
+<p style="margin:0 0 8px;color:#666">Click the button, then paste (Ctrl+V) into Gmail's signature box. This copies the formatted signature, not code.</p>
+<button id="copy">Copy signature</button> <span id="msg" style="color:#2a7a2a;margin-left:8px"></span><br>
+<div class="box"><div id="sig">
+<table role="presentation" width="380" cellpadding="0" cellspacing="0" border="0" style="width:380px;max-width:380px;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;color:#222222;">
+  <tr>
+    <td width="80" valign="top" style="width:80px;padding:0;vertical-align:top;">
+      <a href="https://www.nafaevents.in" target="_blank" style="text-decoration:none;border:0;"><img src="https://res.cloudinary.com/dd9w1bmhf/image/upload/v1794349243/Untitled_Project_2_gdldl8.jpg" width="65" alt="NAFA Events &amp; Activations" border="0" style="display:block;width:65px;height:auto;border:0;outline:none;text-decoration:none;"></a>
+    </td>
+    <td width="300" valign="top" style="width:300px;padding:0;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
+      <div style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:14px;font-weight:bold;color:#111111;">Team NAFA</div>
+      <div style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:11px;letter-spacing:1px;color:#777777;">EVENTS &amp; ACTIVATIONS</div>
+      <div style="margin:0;padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:12px;color:#444444;">Event Management<br>Brand Activations &amp; Experiential Marketing</div>
+      <div style="margin:0;padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:12px;color:#444444;"><a href="https://www.nafaevents.in" target="_blank" style="color:#444444;text-decoration:none;">www.nafaevents.in</a><br><a href="mailto:contact@nafaevents.in" style="color:#444444;text-decoration:none;">contact@nafaevents.in</a><br><a href="tel:+918169512822" style="color:#444444;text-decoration:none;">+91 81695 12822</a></div>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" style="padding:6px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:11px;color:#777777;">Creating Experiences. Delivering Excellence.</td>
+  </tr>
+</table>
+
+</div></div>
+<script>
+document.getElementById("copy").onclick=function(){
+  var el=document.getElementById("sig"),r=document.createRange();r.selectNodeContents(el);
+  var s=window.getSelection();s.removeAllRanges();s.addRange(r);
+  var ok=false;try{ok=document.execCommand("copy")}catch(e){}
+  document.getElementById("msg").textContent=ok?"Copied. Now paste into Gmail.":"Press Ctrl+C to copy the selected signature.";
+};
+</script>
+</body></html>

@@ -4,6 +4,7 @@ import { requireMember } from "@/lib/auth";
 import { listAssignableGroups } from "@/lib/data/groups";
 
 export const metadata = { title: "Import contacts" };
+export const maxDuration = 60;   // server actions started from this page may run up to 60 s
 
 export default async function ImportContactsPage() {
   const { supabase } = await requireMember();

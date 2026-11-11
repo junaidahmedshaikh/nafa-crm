@@ -50,6 +50,8 @@ export function ContactImport({ groups = [] }: { groups?: GroupOption[] }) {
   const [category, setCategory] = useState("");
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [result, setResult] = useState<Result | null>(null);
+  const [progress, setProgress] = useState("");
+  const [failure, setFailure] = useState("");
   const input = useRef<HTMLInputElement>(null);
 
   function onFile(file: File | undefined) {
@@ -82,11 +84,28 @@ export function ContactImport({ groups = [] }: { groups?: GroupOption[] }) {
   function submit() {
     if (!window.confirm(`Import ${ready} contact${ready === 1 ? "" : "s"}${groupIds.length ? ` and add them to ${groupIds.length} group${groupIds.length === 1 ? "" : "s"}` : ""}? Existing contacts (same email) are not duplicated.`)) return;
     start(async () => {
-      const r = await importContactsWithGroups({
-        category: category || undefined, groupIds,
-        rows: rows.map((x) => ({ full_name: x.full_name ?? "", email: x.email ?? "", phone: x.phone, company: x.company, designation: x.designation, industry: x.industry, city: x.city, state: x.state, website: x.website, category: x.category, groups: x.groups })),
-      });
-      if (r.ok) { setResult(r.data); setRows([]); setFileName(""); if (input.current) input.current.value = ""; toast.success("Import finished"); router.refresh(); } else toast.error(r.error);
+      setFailure("");
+      setResult(null);
+      const BATCH = 100;
+      const total: Result = { created: 0, existing: 0, invalid: 0, assigned: 0, groupsCreated: 0 };
+      for (let i = 0; i < rows.length; i += BATCH) {
+        setProgress(`Importing ${Math.min(i + BATCH, rows.length)} of ${rows.length}…`);
+        const r = await importContactsWithGroups({
+          category: category || undefined, groupIds,
+          rows: rows.slice(i, i + BATCH).map((x) => ({ full_name: x.full_name ?? "", email: x.email ?? "", phone: x.phone, company: x.company, designation: x.designation, industry: x.industry, city: x.city, state: x.state, website: x.website, category: x.category, groups: x.groups })),
+        });
+        if (!r.ok) {
+          setProgress("");
+          setFailure(`${r.error}${total.created ? ` ${total.created} contacts were imported before the problem.` : " Nothing was imported."} You can import the file again; existing contacts are never duplicated.`);
+          toast.error(r.error);
+          router.refresh();
+          return;
+        }
+        for (const k of Object.keys(total) as (keyof Result)[]) total[k] += r.data[k];
+      }
+      setProgress("");
+      setResult(total); setRows([]); setFileName(""); if (input.current) input.current.value = "";
+      toast.success("Import finished"); router.refresh();
     });
   }
 
@@ -124,9 +143,11 @@ export function ContactImport({ groups = [] }: { groups?: GroupOption[] }) {
             <Field label="Business category for every row (optional)" hint="Used when a row has no category of its own, e.g. wedding_planners">{(p) => <Input {...p} value={category} onChange={(e) => setCategory(e.target.value)} />}</Field>
           </div>
           <div><p className="mb-1.5 text-[13px] font-medium">Add every imported contact to these recipient groups</p><GroupPicker groups={groups} value={groupIds} onChange={setGroupIds} /></div>
-          <Button variant="primary" loading={pending} disabled={ready < 1} onClick={submit}>Import {ready} contact{ready === 1 ? "" : "s"}</Button>
+          <div className="flex items-center gap-3"><Button variant="primary" loading={pending} disabled={ready < 1} onClick={submit}>Import {ready} contact{ready === 1 ? "" : "s"}</Button>{progress && <span className="text-muted" aria-live="polite">{progress}</span>}</div>
         </>
       )}
+
+      {failure && <div className="rounded-lg border border-danger/30 bg-danger-soft p-4 text-danger" role="alert">{failure}</div>}
 
       {result && (
         <div className="rounded-lg border border-success/30 bg-success-soft p-4">
