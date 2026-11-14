@@ -6,7 +6,6 @@ import { Card, CardHeader, DetailList, EmptyState, PageHeader } from "@/componen
 import { requireMember } from "@/lib/auth";
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import { quotationFromRows } from "@/lib/documents/build";
-import { emailConfigured } from "@/lib/documents/email";
 import { getActivity, getDocSettings, getEmails, getQuotationFull, todayIST } from "@/lib/documents/repo";
 import { formatINR } from "@/lib/format";
 
@@ -45,7 +44,7 @@ export default async function QuotationDetailPage({ params }: PageProps<"/quotat
         </div>
         <QuotationActions
           id={id} status={row.status} effectiveStatus={effective} invoiceCount={live}
-          email={{ number: row.number, clientEmail: row.client_email ?? "", clientName: row.client_name ?? "", subjectLabel: "Quotation", companyName: settings.company_name, emailEnabled: emailConfigured() }}
+          email={{ number: row.number, emails }}
         />
       </div>
 

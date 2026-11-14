@@ -4,21 +4,25 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Ban, Check, CopyPlus, Download, FileCheck2, FilePen, FileSymlink, FileX2, Mail, Pencil, ReceiptText, Send, Trash2, X,
+  Ban, Check, CopyPlus, Download, FileCheck2, FilePen, FileSymlink, FileX2, Pencil, ReceiptText, Send, Trash2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { ConfirmDialog, Modal } from "@/components/ui/modal";
+import { EmailActions } from "@/components/documents/email-dialog";
+import { ScheduleEmailButton } from "@/components/scheduled/schedule-dialog";
 import {
   cancelInvoice, convertQuotationToInvoice, deleteDraft, duplicateInvoice, duplicateProposal, duplicateQuotation, issueInvoice, issueProposal, issueQuotation,
-  recordPayment, reviseQuotation, sendDocumentEmail, setProposalStatus, setQuotationStatus, voidPayment,
+  recordPayment, reviseQuotation, setProposalStatus, setQuotationStatus, voidPayment,
 } from "@/lib/actions/documents";
 import { formatINR } from "@/lib/format";
 import { formatDate } from "@/lib/datetime";
+import type { DocumentEmailLog } from "@/lib/documents/repo";
 import { cn } from "@/lib/utils";
 
 type DocType = "quotation" | "invoice" | "proposal";
+type EmailProps = { number: string | null; emails: DocumentEmailLog[] };
 type Result = { ok: boolean; error?: string; fieldErrors?: Record<string, string>; code?: string };
 
 const linkBtn = "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border-strong bg-surface px-3.5 text-xs font-semibold text-foreground hover:bg-surface-muted shadow-xs transition-colors cursor-pointer";
@@ -35,60 +39,6 @@ function useRunner() {
   return { router, pending, run, startTransition };
 }
 
-// ---------------------------------------------------------------------------
-// Email: recipient, subject and message are shown and the PDF can be reviewed before anything is sent
-// ---------------------------------------------------------------------------
-export function EmailDialog({
-  type, id, number, defaultTo, defaultSubject, defaultMessage, enabled, open, onClose,
-}: { type: DocType; id: string; number: string; defaultTo: string; defaultSubject: string; defaultMessage: string; enabled: boolean; open: boolean; onClose: () => void }) {
-  const { router, pending, startTransition } = useRunner();
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [reviewed, setReviewed] = useState(false);
-  return (
-    <Modal open={open} onClose={onClose} title={`Email ${number}`} description="Review everything below. Nothing is sent until you confirm." className="max-w-xl">
-      {!enabled ? (
-        <div className="space-y-3 text-sm">
-          <p className="rounded-md bg-warning-soft px-3 py-2 text-warning">Email sending is not configured on this server yet, so it is switched off — nothing can be sent from here.</p>
-          <p className="text-muted">Set <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code> in the server environment (see README → Email), then restart. Meanwhile, download the PDF and send it from your own mailbox.</p>
-          <div className="flex justify-end"><Button onClick={onClose}>Close</Button></div>
-        </div>
-      ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const f = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
-            startTransition(async () => {
-              const r = await sendDocumentEmail(type, id, { to: f.to, subject: f.subject, message: f.message });
-              if (r.ok) { toast.success(`Email accepted by the provider and sent to ${f.to}`); onClose(); router.refresh(); }
-              else { setErrors(r.fieldErrors ?? {}); toast.error(r.error); }
-            });
-          }}
-        >
-          <Field label="To" required error={errors.to}>{(p) => <Input {...p} name="to" type="email" defaultValue={defaultTo} />}</Field>
-          <Field label="Subject" required error={errors.subject}>{(p) => <Input {...p} name="subject" defaultValue={defaultSubject} />}</Field>
-          <Field label="Message" required error={errors.message}>{(p) => <Textarea {...p} name="message" rows={6} defaultValue={defaultMessage} />}</Field>
-          <p className="text-sm">Attachment: <a className="font-medium text-accent underline" href={`/api/documents/${type}/${id}/pdf`} target="_blank" rel="noopener noreferrer">{number}.pdf — open to review</a></p>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />I have reviewed the recipient, message and attached PDF</label>
-          <div className="flex justify-end gap-2">
-            <Button onClick={onClose} disabled={pending}>Cancel</Button>
-            <Button type="submit" variant="primary" loading={pending} disabled={!reviewed}><Send className="h-4 w-4" aria-hidden />Send email</Button>
-          </div>
-        </form>
-      )}
-    </Modal>
-  );
-}
-
-type EmailProps = { number: string | null; clientEmail: string; clientName: string; subjectLabel: string; companyName: string; emailEnabled: boolean };
-
-function defaultEmail(p: EmailProps, extra = "") {
-  return {
-    subject: `${p.subjectLabel} ${p.number} from ${p.companyName}`,
-    message: `Dear ${p.clientName || "Sir/Madam"},\n\nPlease find attached ${p.subjectLabel.toLowerCase()} ${p.number}.${extra}\n\nPlease get in touch if you have any questions.\n\nRegards,\n${p.companyName}`,
-  };
-}
-
 function Downloads({ type, id }: { type: DocType; id: string }) {
   return (
     <>
@@ -103,9 +53,8 @@ function Downloads({ type, id }: { type: DocType; id: string }) {
 // ---------------------------------------------------------------------------
 export function QuotationActions({ id, status, effectiveStatus, invoiceCount, email }: { id: string; status: string; effectiveStatus: string; invoiceCount: number; email: EmailProps }) {
   const { router, pending, run } = useRunner();
-  const [dlg, setDlg] = useState<null | "issue" | "delete" | "convert" | "convert2" | "email" | "reject">(null);
+  const [dlg, setDlg] = useState<null | "issue" | "delete" | "convert" | "convert2" | "reject">(null);
   const close = () => setDlg(null);
-  const em = defaultEmail(email, "\n\nThe quotation is valid until the date stated on it.");
   const open = status !== "draft";
 
   return (
@@ -118,7 +67,8 @@ export function QuotationActions({ id, status, effectiveStatus, invoiceCount, em
           </>
         )}
         <Downloads type="quotation" id={id} />
-        {open && <Button onClick={() => setDlg("email")}><Mail className="h-4 w-4" aria-hidden />Email</Button>}
+        <EmailActions type="quotation" id={id} number={email.number} canSend={open} emails={email.emails} />
+        {open && <ScheduleEmailButton type="quotation" id={id} />}
         {(status === "sent" || status === "expired") && (
           <>
             <Button onClick={() => run(() => setQuotationStatus(id, "accepted"), "Marked as accepted")} disabled={pending}><Check className="h-4 w-4" aria-hidden />Mark accepted</Button>
@@ -153,7 +103,6 @@ export function QuotationActions({ id, status, effectiveStatus, invoiceCount, em
       <ConfirmDialog open={dlg === "convert2"} onClose={close} pending={pending} confirmLabel="Yes, create another invoice"
         title="This quotation was already converted" description="An invoice already exists for this quotation. Create an additional one only if you really need it (for example a separate invoice per milestone)."
         onConfirm={() => run(async () => { const r = await convertQuotationToInvoice(id, true); if (r.ok && r.data) router.push(`/invoices/${r.data.id}/edit`); return r; }, "Additional invoice draft created", close)} />
-      {email.number && <EmailDialog type="quotation" id={id} number={email.number} defaultTo={email.clientEmail} defaultSubject={em.subject} defaultMessage={em.message} enabled={email.emailEnabled} open={dlg === "email"} onClose={close} />}
     </>
   );
 }
@@ -163,10 +112,9 @@ export function QuotationActions({ id, status, effectiveStatus, invoiceCount, em
 // ---------------------------------------------------------------------------
 export function InvoiceActions({ id, state, balance, email }: { id: string; state: string; balance: number; email: EmailProps }) {
   const { router, pending, run } = useRunner();
-  const [dlg, setDlg] = useState<null | "issue" | "delete" | "cancel" | "pay" | "email">(null);
+  const [dlg, setDlg] = useState<null | "issue" | "delete" | "cancel" | "pay">(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const close = () => { setDlg(null); setErrors({}); };
-  const em = defaultEmail(email, "\n\nPlease use the invoice number as the payment reference.");
   const [today] = useState(() => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10));
 
   function submitForm<T extends Result>(action: (f: Record<string, string>) => Promise<T>, ok: string) {
@@ -187,13 +135,11 @@ export function InvoiceActions({ id, state, balance, email }: { id: string; stat
           </>
         )}
         <Downloads type="invoice" id={id} />
-        {state === "issued" && (
-          <>
-            <Button variant="accent" onClick={() => setDlg("pay")} disabled={balance <= 0}><FileSymlink className="h-4 w-4" aria-hidden />Record payment</Button>
-            <Button onClick={() => setDlg("email")}><Mail className="h-4 w-4" aria-hidden />Email</Button>
-            <Button variant="danger-outline" onClick={() => setDlg("cancel")}><FileX2 className="h-4 w-4" aria-hidden />Cancel invoice</Button>
-          </>
-        )}
+        {state === "issued" && <Button variant="accent" onClick={() => setDlg("pay")} disabled={balance <= 0}><FileSymlink className="h-4 w-4" aria-hidden />Record payment</Button>}
+        <EmailActions type="invoice" id={id} number={email.number} canSend={state === "issued"} emails={email.emails} />
+        {state === "issued" && <ScheduleEmailButton type="invoice" id={id} />}
+        {state === "issued" && balance > 0 && <ScheduleEmailButton type="invoice" id={id} kind="payment_reminder" />}
+        {state === "issued" && <Button variant="danger-outline" onClick={() => setDlg("cancel")}><FileX2 className="h-4 w-4" aria-hidden />Cancel invoice</Button>}
         <Button onClick={() => run(async () => { const r = await duplicateInvoice(id); if (r.ok && r.data) router.push(`/invoices/${r.data.id}/edit`); return r; }, state === "cancelled" ? "Corrected draft created" : "Duplicate draft created")} disabled={pending}>
           <CopyPlus className="h-4 w-4" aria-hidden />{state === "issued" || state === "cancelled" ? "Create corrected draft" : "Duplicate"}
         </Button>
@@ -229,7 +175,6 @@ export function InvoiceActions({ id, state, balance, email }: { id: string; stat
           <div className="flex justify-end gap-2"><Button onClick={close} disabled={pending}>Cancel</Button><Button type="submit" variant="primary" loading={pending}>Record payment</Button></div>
         </form>
       </Modal>
-      {email.number && <EmailDialog type="invoice" id={id} number={email.number} defaultTo={email.clientEmail} defaultSubject={em.subject} defaultMessage={em.message} enabled={email.emailEnabled} open={dlg === "email"} onClose={close} />}
     </>
   );
 }
@@ -269,9 +214,8 @@ export function PaymentsTable({
 // ---------------------------------------------------------------------------
 export function ProposalActions({ id, status, email }: { id: string; status: string; email: EmailProps }) {
   const { router, pending, run } = useRunner();
-  const [dlg, setDlg] = useState<null | "issue" | "delete" | "email">(null);
+  const [dlg, setDlg] = useState<null | "issue" | "delete">(null);
   const close = () => setDlg(null);
-  const em = defaultEmail(email);
   const open = status !== "draft";
   return (
     <>
@@ -283,7 +227,7 @@ export function ProposalActions({ id, status, email }: { id: string; status: str
           </>
         )}
         <Downloads type="proposal" id={id} />
-        {open && <Button onClick={() => setDlg("email")}><Mail className="h-4 w-4" aria-hidden />Email</Button>}
+        <EmailActions type="proposal" id={id} number={email.number} canSend={open} emails={email.emails} />
         {status === "sent" && (
           <>
             <Button onClick={() => run(() => setProposalStatus(id, "accepted"), "Marked as accepted")} disabled={pending}><Check className="h-4 w-4" aria-hidden />Mark accepted</Button>
@@ -299,7 +243,6 @@ export function ProposalActions({ id, status, email }: { id: string; status: str
         onConfirm={() => run(() => issueProposal(id), "Proposal issued", close)} />
       <ConfirmDialog open={dlg === "delete"} onClose={close} pending={pending} confirmLabel="Delete draft" title="Delete this draft?" description="Drafts can be deleted. This cannot be undone."
         onConfirm={() => run(async () => { const r = await deleteDraft("proposal", id); if (r.ok) router.replace("/proposals"); return r; }, "Draft deleted", close, false)} />
-      {email.number && <EmailDialog type="proposal" id={id} number={email.number} defaultTo={email.clientEmail} defaultSubject={em.subject} defaultMessage={em.message} enabled={email.emailEnabled} open={dlg === "email"} onClose={close} />}
     </>
   );
 }

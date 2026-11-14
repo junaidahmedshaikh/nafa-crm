@@ -6,7 +6,6 @@ import { Card, CardHeader, DetailList, EmptyState, PageHeader } from "@/componen
 import { requireMember } from "@/lib/auth";
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import { invoiceFromRows } from "@/lib/documents/build";
-import { emailConfigured } from "@/lib/documents/email";
 import { getActivity, getDocSettings, getEmails, getInvoiceFull, todayIST } from "@/lib/documents/repo";
 import { formatINR } from "@/lib/format";
 
@@ -37,7 +36,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/invoices
         </div>
         <InvoiceActions
           id={id} state={row.state} balance={render.balance_due}
-          email={{ number: row.number, clientEmail: row.client_email ?? "", clientName: row.client_name ?? "", subjectLabel: "Invoice", companyName: settings.company_name, emailEnabled: emailConfigured() }}
+          email={{ number: row.number, emails }}
         />
       </div>
 

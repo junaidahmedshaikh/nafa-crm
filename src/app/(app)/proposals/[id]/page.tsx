@@ -8,8 +8,7 @@ import { Card, CardHeader, DetailList, PageHeader } from "@/components/ui/layout
 import { requireMember } from "@/lib/auth";
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import { missingSections } from "@/lib/documents/build";
-import { emailConfigured } from "@/lib/documents/email";
-import { getActivity, getDocSettings, getEmails, getProposalFull } from "@/lib/documents/repo";
+import { getActivity, getEmails, getProposalFull } from "@/lib/documents/repo";
 
 export const metadata = { title: "Proposal" };
 
@@ -19,7 +18,6 @@ export default async function ProposalDetailPage({ params }: PageProps<"/proposa
   const full = await getProposalFull(supabase, id);
   if (!full) notFound();
   const { row } = full;
-  const settings = await getDocSettings();
   const [activity, emails] = await Promise.all([getActivity(supabase, "proposal", id), getEmails(supabase, "proposal", id)]);
   const missing =
     row.status === "draft" ? missingSections(full.sections, (i) => full.attachments.filter((a) => a.section_id === full.sections[i].id).length) : [];
@@ -43,7 +41,7 @@ export default async function ProposalDetailPage({ params }: PageProps<"/proposa
         )}
         <ProposalActions
           id={id} status={row.status}
-          email={{ number: row.number, clientEmail: row.client_email ?? "", clientName: row.client_name ?? "", subjectLabel: "Proposal", companyName: settings.company_name, emailEnabled: emailConfigured() }}
+          email={{ number: row.number, emails }}
         />
       </div>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">

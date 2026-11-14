@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, ReceiptText } from "lucide-react";
 import { DocListFilter } from "@/components/documents/list-filter";
+import { EmailRowAction } from "@/components/documents/email-dialog";
 import { DocStatusBadge } from "@/components/documents/status-badge";
 import { LinkButton } from "@/components/ui/button";
 import { Card, DataTable, EmptyState, PageHeader, Pagination, Td, Th } from "@/components/ui/layout";
@@ -37,7 +38,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<"/invoice
         ) : (
           <>
             <DataTable>
-              <thead><tr><Th>Invoice</Th><Th>Client</Th><Th>Project</Th><Th>Date</Th><Th>Due</Th><Th className="text-right">Total</Th><Th className="text-right">Balance</Th><Th>Status</Th></tr></thead>
+              <thead><tr><Th>Invoice</Th><Th>Client</Th><Th>Project</Th><Th>Date</Th><Th>Due</Th><Th className="text-right">Total</Th><Th className="text-right">Balance</Th><Th>Status</Th><Th className="text-right">Actions</Th></tr></thead>
               <tbody>
                 {rows.map((i) => (
                   <tr key={i.id} className="hover:bg-surface-muted">
@@ -49,6 +50,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<"/invoice
                     <Td className="text-right tabular-nums">{formatINR(i.grand_total, { exact: true })}</Td>
                     <Td className="text-right tabular-nums">{i.number && i.payment_status !== "cancelled" ? formatINR(i.balance_due, { exact: true }) : "—"}</Td>
                     <Td><DocStatusBadge status={i.payment_status} /></Td>
+                    <Td className="text-right">{i.number && i.state === "issued" && <EmailRowAction type="invoice" id={i.id} number={i.number} />}</Td>
                   </tr>
                 ))}
               </tbody>

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Bell, MonitorSmartphone } from "lucide-react";
+import { Bell } from "lucide-react";
+import { notificationIcon } from "@/components/notifications/notification-centre";
 import { createClient } from "@/lib/client";
 import { markNotificationsRead } from "@/lib/actions/notifications";
 import { formatDateTime } from "@/lib/datetime";
@@ -98,10 +99,11 @@ export function NotificationBell({ userId, isAdmin }: { userId: string; isAdmin:
             {items.map((n) => {
               const d = n.data as { url?: string; platform?: Platform; browser?: string; user_email?: string; installed_at?: string; first_launch_at?: string | null };
               const isInstall = n.type === "app_install";
+              const Icon = notificationIcon(n.type);
               const body = (
                 <div className="flex gap-3">
                   <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.read_at ? "bg-foreground/5 text-muted" : "bg-accent-soft text-accent")}>
-                    <MonitorSmartphone className="h-4 w-4" aria-hidden />
+                    <Icon className="h-4 w-4" aria-hidden />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className={cn("text-sm", !n.read_at && "font-semibold")}>{n.title}</p>
@@ -138,6 +140,9 @@ export function NotificationBell({ userId, isAdmin }: { userId: string; isAdmin:
               );
             })}
           </ul>
+          <Link href="/notifications" onClick={() => setOpen(false)} className="block border-t border-border px-4 py-2.5 text-center text-xs font-medium text-accent hover:bg-surface-muted">
+            View all notifications &amp; preferences
+          </Link>
         </div>
       )}
     </div>

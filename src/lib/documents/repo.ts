@@ -212,10 +212,21 @@ export async function getActivity(supabase: SupabaseClient, type: "quotation" | 
   return (data ?? []) as unknown as { id: string; action: string; summary: string; created_at: string; author: { full_name: string } | null }[];
 }
 
-export async function getEmails(supabase: SupabaseClient, type: "quotation" | "invoice" | "proposal", id: string) {
-  const { data } = await supabase
-    .from("document_emails").select("id, to_email, subject, status, error, sent_at").eq("doc_type", type).eq("doc_id", id).order("sent_at", { ascending: false }).limit(20);
-  return (data ?? []) as { id: string; to_email: string; subject: string; status: string; error: string | null; sent_at: string }[];
+export type DocumentEmailLog = {
+  id: string; to_email: string; cc_emails: string[]; bcc_emails: string[]; subject: string; body: string; status: "sent" | "failed";
+  error: string | null; attachment_name: string | null; sent_at: string; sender: { full_name: string } | null;
+};
+
+/** Email history of one document, newest first. Works before the CC/BCC migration has been applied (those fields come back empty). */
+export async function getEmails(supabase: SupabaseClient, type: "quotation" | "invoice" | "proposal", id: string): Promise<DocumentEmailLog[]> {
+  const base = "id, to_email, subject, body, status, error, sent_at, sender:profiles(full_name)";
+  const load = (cols: string) =>
+    supabase.from("document_emails").select(cols).eq("doc_type", type).eq("doc_id", id).order("sent_at", { ascending: false }).limit(100);
+  let { data, error } = await load(`${base}, cc_emails, bcc_emails, attachment_name`);
+  if (error) ({ data, error } = await load(base));
+  return ((data ?? []) as unknown as Partial<DocumentEmailLog>[]).map((e) => ({
+    cc_emails: [], bcc_emails: [], attachment_name: null, ...e,
+  })) as DocumentEmailLog[];
 }
 
 export async function listProducts(supabase: SupabaseClient, p: { q: string; page: number; activeOnly: boolean }) {

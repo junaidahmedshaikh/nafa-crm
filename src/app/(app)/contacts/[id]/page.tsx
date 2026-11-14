@@ -6,6 +6,7 @@ import { ArchiveButton } from "@/components/directory/archive-button";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { Card, CardHeader, DataTable, DetailList, EmptyState, PageHeader, Td, Th } from "@/components/ui/layout";
+import { ScheduleEmailButton } from "@/components/scheduled/schedule-dialog";
 import { requireMember } from "@/lib/auth";
 import { getContact } from "@/lib/data/directory";
 import { contactGroupIds, listAssignableGroups } from "@/lib/data/groups";
@@ -31,6 +32,7 @@ export default async function ContactDetailPage({ params }: PageProps<"/contacts
         actions={
           <>
             {c.archived_at && <Badge>Archived {formatDate(c.archived_at)}</Badge>}
+            {!c.archived_at && <ScheduleEmailButton type="contact" id={c.id} />}
             <LinkButton href={`/contacts/${c.id}/edit`}>Edit</LinkButton>
             {profile.role === "admin" && <DeleteContactButton id={c.id} name={c.full_name} leadCount={leads.length} />}
             <ArchiveButton kind="contact" id={c.id} name={c.full_name} archived={!!c.archived_at} />

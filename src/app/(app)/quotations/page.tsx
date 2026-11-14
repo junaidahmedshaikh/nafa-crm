@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FileText, Plus } from "lucide-react";
 import { DocListFilter } from "@/components/documents/list-filter";
+import { EmailRowAction } from "@/components/documents/email-dialog";
 import { DocStatusBadge } from "@/components/documents/status-badge";
 import { LinkButton } from "@/components/ui/button";
 import { Card, DataTable, EmptyState, PageHeader, Pagination, Td, Th } from "@/components/ui/layout";
@@ -36,7 +37,7 @@ export default async function QuotationsPage({ searchParams }: PageProps<"/quota
         ) : (
           <>
             <DataTable>
-              <thead><tr><Th>Quotation</Th><Th>Client</Th><Th>Event</Th><Th>Date</Th><Th>Valid until</Th><Th className="text-right">Total</Th><Th>Status</Th></tr></thead>
+              <thead><tr><Th>Quotation</Th><Th>Client</Th><Th>Event</Th><Th>Date</Th><Th>Valid until</Th><Th className="text-right">Total</Th><Th>Status</Th><Th className="text-right">Actions</Th></tr></thead>
               <tbody>
                 {rows.map((q) => (
                   <tr key={q.id} className="hover:bg-surface-muted">
@@ -47,6 +48,7 @@ export default async function QuotationsPage({ searchParams }: PageProps<"/quota
                     <Td className="whitespace-nowrap text-muted">{q.valid_until ? formatDate(q.valid_until) : "—"}</Td>
                     <Td className="text-right tabular-nums">{formatINR(q.grand_total, { exact: true })}</Td>
                     <Td><DocStatusBadge status={q.effective_status} /></Td>
+                    <Td className="text-right">{q.number && q.status !== "draft" && <EmailRowAction type="quotation" id={q.id} number={q.number} />}</Td>
                   </tr>
                 ))}
               </tbody>

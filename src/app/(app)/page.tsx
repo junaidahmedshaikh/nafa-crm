@@ -21,7 +21,9 @@ import {
   OPEN_STATUSES,
   FOLLOW_UP_TYPE_LABELS,
 } from "@/lib/constants";
+import { PendingPayments } from "@/components/scheduled/pending-payments";
 import { getDashboardData } from "@/lib/data/dashboard";
+import { listReceivables } from "@/lib/scheduled/repo";
 import { formatDate, formatDateTime, istDayBounds, relativeDue } from "@/lib/datetime";
 import { formatINR, formatLeadNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -94,7 +96,7 @@ function Metric({
 
 export default async function DashboardPage() {
   const { supabase } = await requireMember();
-  const d = await getDashboardData(supabase);
+  const [d, receivables] = await Promise.all([getDashboardData(supabase), listReceivables(supabase, 60).catch(() => [])]);
   const now = new Date();
   const { end: todayEnd } = istDayBounds(now);
   const maxCount = Math.max(1, ...d.pipeline.map((p) => p.count));
@@ -117,6 +119,8 @@ export default async function DashboardPage() {
           </div>
         }
       />
+
+      <PendingPayments receivables={receivables} />
 
       {/* Financial & Document Metrics */}
       <div className="mb-6">

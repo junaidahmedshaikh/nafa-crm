@@ -391,6 +391,24 @@ describe("authorisation (RLS) for document tables", () => {
       await expect(q(`update document_activity set summary='x'`)).rejects.toThrow(/permission denied/i);
       await expect(q(`delete from document_activity`)).rejects.toThrow(/permission denied/i);
       await expect(q(`update document_emails set status='sent'`)).rejects.toThrow(/permission denied/i);
+      await expect(q(`delete from document_emails`)).rejects.toThrow(/permission denied/i);
+    });
+  });
+
+  it("records CC, BCC, the attachment and the sender in the email history", async () => {
+    await as(async () => {
+      const id = await newQuotation();
+      await q(`insert into document_emails (doc_type, doc_id, to_email, subject, body, status) values ('quotation', $1, 'old@x.com', 's', 'b', 'failed')`, [id]);
+      await q(`insert into document_emails (doc_type, doc_id, to_email, cc_emails, bcc_emails, attachment_name, subject, body, status, provider_id)
+               values ('quotation', $1, 'c@x.com', '{a@x.com,b@x.com}', '{z@x.com}', 'NAFA-QUO-26-001-Acme.pdf', 's', 'b', 'sent', 'msg_1')`, [id]);
+      const rows = await q<{ to_email: string; cc_emails: string[]; bcc_emails: string[]; attachment_name: string | null; sent_by: string }>(
+        `select to_email, cc_emails, bcc_emails, attachment_name, sent_by from document_emails where doc_id=$1 order by to_email`, [id]);
+      expect(rows[0]).toMatchObject({ to_email: "c@x.com", cc_emails: ["a@x.com", "b@x.com"], bcc_emails: ["z@x.com"], attachment_name: "NAFA-QUO-26-001-Acme.pdf", sent_by: ADMIN_ID });
+      expect(rows[1]).toMatchObject({ to_email: "old@x.com", cc_emails: [], bcc_emails: [], attachment_name: null });
+      await expect(q(`insert into document_emails (doc_type, doc_id, to_email, subject, body, status) values ('quotation', $1, 'c@x.com', 's', 'b', 'delivered')`, [id])).rejects.toThrow(/check/i);
+    });
+    await asUser(db, OUTSIDER_ID, async () => {
+      await expect(q(`insert into document_emails (doc_type, doc_id, to_email, subject, body, status) values ('quotation', gen_random_uuid(), 'c@x.com', 's', 'b', 'sent')`)).rejects.toThrow(/row-level security/i);
     });
   });
 });

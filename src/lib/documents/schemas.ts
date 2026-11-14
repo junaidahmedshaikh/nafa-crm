@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { optDate, optEmail, optText, optUuid, reqText } from "@/lib/validation/common";
 import { DEFAULT_CALC_CONFIG, type CalcConfig } from "./calc";
+import { parseAddressList } from "./email-template";
 import { TERMS_TYPES } from "./invoice-terms";
 
 /** Required calendar date "YYYY-MM-DD". */
@@ -257,10 +258,25 @@ export const documentSettingsSchema = z.object({
 });
 export type DocumentSettingsValues = z.input<typeof documentSettingsSchema>;
 
+const MAX_COPIES = 10;
+/** Optional comma-separated address list (CC / BCC) -> validated, de-duplicated array. */
+const addressList = (label: string) =>
+  z.string().max(1000, "Too many addresses").optional().transform((v, ctx) => {
+    const list = parseAddressList(v);
+    const bad = list.find((a) => !z.email().safeParse(a).success);
+    if (bad) ctx.addIssue({ code: "custom", message: `"${bad}" is not a valid email address` });
+    else if (list.length > MAX_COPIES) ctx.addIssue({ code: "custom", message: `${label} can have at most ${MAX_COPIES} addresses` });
+    return list;
+  });
+
 export const sendEmailSchema = z.object({
-  to: z.email("Enter a valid recipient email address"),
+  to: z.string().trim().toLowerCase().pipe(z.email("Enter a valid recipient email address")),
+  cc: addressList("CC"),
+  bcc: addressList("BCC"),
   subject: reqText("Subject", 200),
   message: reqText("Message", 5000),
+  /** Generated once per opened composer; the provider refuses to send the same key twice (double-click / retry safety). */
+  idempotencyKey: z.uuid().optional(),
 });
 
 /** Parses stored config JSON (tolerating missing keys) into a CalcConfig. */

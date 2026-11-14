@@ -59,7 +59,10 @@ export async function adminIds(): Promise<string[]> {
  * Notifies people everywhere: a row in the in-app bell AND a push to their installed apps.
  * `audience` is a list of user ids, or "team" (all active members) / "admins".
  */
-export async function notify(audience: string[] | "team" | "admins", n: PushPayload & { type: string; data?: Record<string, unknown> }): Promise<void> {
+export async function notify(
+  audience: string[] | "team" | "admins" | "finance",
+  n: PushPayload & { type: string; data?: Record<string, unknown>; /** Same key => each person is told only once (scheduled jobs). */ dedupeKey?: string },
+): Promise<void> {
   try {
     const admin = createAdminClient();
     let ids: string[];
@@ -67,11 +70,27 @@ export async function notify(audience: string[] | "team" | "admins", n: PushPayl
     else {
       let q = admin.from("profiles").select("id").eq("is_active", true);
       if (audience === "admins") q = q.eq("role", "admin");
+      // "finance": administrators plus accounts / management (the people who may see money).
+      if (audience === "finance") q = q.or("role.eq.admin,finance_role.in.(accounts,management)");
       ids = ((await q).data ?? []).map((p: { id: string }) => p.id);
     }
     ids = [...new Set(ids)];
     if (!ids.length) return;
-    await admin.from("notifications").insert(ids.map((user_id) => ({ user_id, type: n.type, title: n.title, body: n.body, data: { ...(n.data ?? {}), url: safeUrl(n.url) } })));
+    // Each person's own preferences: a muted type is neither shown in the bell nor pushed. (Table missing => nobody has muted anything.)
+    const { data: prefs } = await admin.from("notification_preferences").select("user_id, muted_types").in("user_id", ids);
+    const muted = new Set((prefs ?? []).filter((p: { muted_types: string[] }) => p.muted_types?.includes(n.type)).map((p: { user_id: string }) => p.user_id));
+    ids = ids.filter((id) => !muted.has(id));
+    if (!ids.length) return;
+    const rows = ids.map((user_id) => ({ user_id, type: n.type, title: n.title, body: n.body, data: { ...(n.data ?? {}), url: safeUrl(n.url) } }));
+    if (n.dedupeKey) {
+      const { data: fresh, error } = await admin.from("notifications")
+        .upsert(rows.map((r) => ({ ...r, dedupe_key: n.dedupeKey })), { onConflict: "user_id,dedupe_key", ignoreDuplicates: true }).select("user_id");
+      if (error) { console.error("[notify]", error.message); return; }
+      ids = (fresh ?? []).map((r: { user_id: string }) => r.user_id);   // push only to people who were not already told
+      if (!ids.length) return;
+    } else {
+      await admin.from("notifications").insert(rows);
+    }
     await sendPushToUsers(ids, { title: n.title, body: n.body, url: n.url, tag: n.tag });
   } catch (e) {
     console.error("[notify]", (e as Error).message);

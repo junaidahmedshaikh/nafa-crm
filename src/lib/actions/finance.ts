@@ -4,6 +4,7 @@ import { authorized } from "@/lib/auth";
 import type { ActionResult } from "@/lib/types";
 import { fail, friendlyDbError, isUuid, refresh } from "@/lib/actions/util";
 import { buildPrefill, type ProjectPrefill } from "@/lib/finance/event";
+import { onExpenseRecorded } from "@/lib/scheduled/alerts";
 import { fieldErrorsFrom } from "@/lib/validation/common";
 import {
   budgetRowsSchema, categorySchema, expenseInputSchema, expensePaymentSchema, projectInputSchema, reimbursementSchema, revenueItemSchema, vendorSchema,
@@ -101,7 +102,7 @@ export async function restoreRecord(kind: SoftKind, id: string): Promise<ActionR
 // Expenses and their payments
 // ---------------------------------------------------------------------------
 export async function saveExpense(values: Parameters<typeof expenseInputSchema.parse>[0], id?: string): Promise<ActionResult<{ id: string }>> {
-  return authorized(async ({ supabase }) => {
+  return authorized(async ({ supabase, profile }) => {
     const parsed = expenseInputSchema.safeParse(values);
     if (!parsed.success) return fail("Please fix the highlighted fields.", fieldErrorsFrom(parsed.error));
     if (id && !isUuid(id)) return fail("Expense not found.");
@@ -128,6 +129,10 @@ export async function saveExpense(values: Parameters<typeof expenseInputSchema.p
     }
     const { data, error } = await supabase.from("expenses").insert(row).select("id").single();
     if (error) return fail(dbMessage(error), error.code === "23505" ? { bill_number: "This vendor bill is already entered on the project" } : undefined);
+    await onExpenseRecorded({
+      projectId: e.project_id, categoryId: e.category_id, title: e.title || e.description || "Expense",
+      total: Math.round((Number(e.qty) * Number(e.rate) + Number(e.gst_amount)) * 100) / 100, by: profile.full_name || "a team member",
+    });
     refresh(project(e.project_id));
     return { ok: true, data: { id: data.id as string } };
   });

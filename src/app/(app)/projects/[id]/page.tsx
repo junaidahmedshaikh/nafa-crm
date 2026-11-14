@@ -10,6 +10,7 @@ import { FilterForm } from "@/components/shared/filter-form";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
 import { Card, CardHeader, DataTable, DetailList, EmptyState, PageHeader, Pagination, Td, Th } from "@/components/ui/layout";
+import { ScheduleEmailButton } from "@/components/scheduled/schedule-dialog";
 import { requireMember } from "@/lib/auth";
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import { groupCostLines, profitAndLoss, type CostLine } from "@/lib/finance/calc";
@@ -56,6 +57,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         description={`${projectCode(project.project_number)}${project.company?.name ? ` · ${project.company.name}` : ""}${deleted ? " · Deleted" : ""}`}
         actions={
           <>
+            {!deleted && <ScheduleEmailButton type="project" id={id} />}
             {!deleted && <AddExpenseButton projectId={id} categories={categories} vendors={vendors} canAddCategory={access.manage} />}
             {access.manage && !deleted && <LinkButton href={`${base}/edit`} variant="outline">Edit project</LinkButton>}
             {access.manage && <DeleteRestoreButton kind="project" id={id} deleted={deleted} isAdmin={access.admin} label="Project" />}

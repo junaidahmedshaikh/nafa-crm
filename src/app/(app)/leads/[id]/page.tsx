@@ -6,6 +6,7 @@ import { LogCommunication } from "@/components/bdm/bdm-controls";
 import { LeadActions } from "@/components/leads/lead-actions";
 import { Badge, PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Card, CardHeader, DetailList, EmptyState, PageHeader } from "@/components/ui/layout";
+import { ScheduleEmailButton } from "@/components/scheduled/schedule-dialog";
 import { getSettings, requireMember } from "@/lib/auth";
 import { FOLLOW_UP_TYPE_LABELS, LEAD_SOURCE_LABELS, SERVICE_CATEGORY_LABELS } from "@/lib/constants";
 import { getLead, getLeadActivities, getLeadFollowUps } from "@/lib/data/leads";
@@ -38,6 +39,7 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
         <StatusBadge status={lead.status} />
         <PriorityBadge priority={lead.priority} />
         {lead.archived_at && <Badge tone="neutral">Archived {formatDate(lead.archived_at)}</Badge>}
+        {!lead.archived_at && <span className="ml-auto"><ScheduleEmailButton type="lead" id={lead.id} size="sm" /></span>}
         <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden />
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Link href={`/quotations/new?lead=${lead.id}`} className="inline-flex h-9 items-center rounded-md border border-border-strong bg-surface px-3 text-sm font-medium hover:bg-surface-muted">+ Quotation</Link>

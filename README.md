@@ -357,3 +357,61 @@ Run `supabase/migrations/20261105000001_invoice_terms.sql` in the Supabase SQL e
 * **Frozen when issued**: the terms are saved onto the invoice when it is issued, so editing the wording later never changes an invoice already issued. Drafts always use the current wording. Invoices issued before this feature print no terms section.
 * **Layout**: terms follow the notes. An invoice with terms normally runs to two pages; headings never sit alone at the bottom of a page.
 * **Review**: the supplied wording is a template. Have your CA review the GST, TDS and MSME wording and a lawyer review the jurisdiction and damages clauses once. Keep your bank/UPI details current in Settings → Documents and tell clients directly before ever changing them.
+
+## Send by Email (invoices, quotations, proposals)
+
+**Send by Email** is on each issued document's page and as a mail icon in the Invoices and Quotations lists. It opens a composer with:
+
+* **To** filled from the client email saved on the document, else the linked contact, else a contact of the linked company. If none exists a warning is shown and the address is typed in by hand (the client record is not changed).
+* Optional **CC / BCC** (comma-separated, up to 10 each), an editable **subject** and **message** (templates in `src/lib/documents/email-template.ts`).
+* The document's PDF attached automatically, with an inline **Preview PDF**.
+* A final confirmation tick box — nothing is sent without it. The send button shows a loading state and each opened composer carries an idempotency key, so a double click cannot deliver twice.
+
+**View Email History** on the document page lists every attempt: recipient, CC/BCC, subject, date and time, Sent / Failed (with the provider's error), body, attachment name and the CRM user who sent it. An email is recorded as *Sent* only when Resend accepts it and returns a message id; a PDF or provider failure is recorded as *Failed*.
+
+### Setup
+Run `supabase/migrations/20261117000001_document_email_history.sql` in the Supabase SQL editor (fresh projects: `setup-all.sql` already includes it). It only adds three columns to `document_emails`. Until it is run, sending and the history still work, but CC/BCC and the attachment name are not saved in the history.
+
+Sending uses the existing Resend configuration (`RESEND_API_KEY`, `EMAIL_FROM`); there is no second email system.
+
+## Payment notifications, scheduled follow-ups, finance reports and the expandable sidebar
+
+### What was added
+| Area | Where | Notes |
+| --- | --- | --- |
+| Scheduled emails / follow-ups | `/scheduled-emails`, plus a **Schedule follow-up** button on contacts, leads, quotations, invoices and projects | Send now, schedule for later (date, time, time zone; default Asia/Kolkata) or save as draft. Edit, reschedule, cancel or send immediately from the list. Optional quotation / invoice PDF attachment. |
+| Payment reminders | `/payment-reminders`, plus **Payment reminder** on an issued invoice | Outstanding invoices, one-off reminders (now or scheduled), per-invoice automatic switch, reminder history with delivery status, and the automatic rules (7 / 3 / 1 days before, on the due date, 3 / 7 / 15 days after). Automatic reminders are **off** until an admin / accounts / management user switches them on. |
+| Notification centre | bell in the top bar, `/notifications` | Payment received (full / partial), invoice due soon / due today / overdue, scheduled email sent / failed, follow-up due today, expense recorded, budget exceeded, profitability warning. Unread count, mark one / all as read, filter by type, per-user preferences. |
+| Finance reports | `/finance/reports` | Project-wise value, invoiced, received, outstanding, estimated and actual expenses, unpaid vendor bills, gross profit and margin, plus the expense register. Filters: project, client, date range, category, payment status. Export to CSV (opens in Excel) and Print / Save PDF. |
+| Dashboard | `/` | Pending payments card: client, invoice, project, pending amount, due date. |
+| Sidebar | everywhere | Expandable sections with a chevron, active section and page highlighted, state remembered per device. In the collapsed (icon) sidebar a section opens as a fly-out on hover or click. All existing routes are unchanged. |
+
+### Setup
+1. Run `supabase/migrations/20261117000001_document_email_history.sql` and then `supabase/migrations/20261118000001_scheduled_emails_reminders.sql` in the Supabase SQL editor (fresh projects: `setup-all.sql` already includes both). Both are additive: new tables and columns only, no existing row is changed. Take a database backup (Supabase Dashboard → Database → Backups) before running them.
+2. Environment (same variables the CRM already uses): `RESEND_API_KEY`, `EMAIL_FROM`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`. Without the service-role key the scheduler cannot run and notifications are not created; sending now from the screen still works.
+3. Scheduler. `vercel.json` calls `/api/cron/scheduled` once a day at 10:00 IST. That is enough for automatic payment reminders and the due / overdue alerts. For a scheduled email to leave at the minute it was scheduled for, the route must also be called every 5–10 minutes with `Authorization: Bearer $CRON_SECRET`: use Vercel Cron on a paid plan (`*/10 * * * *`), an external pinger, or Supabase pg_cron + pg_net:
+
+```sql
+select cron.schedule('nafa-scheduled-emails', '*/10 * * * *', $$
+  select net.http_get(url := 'https://nafa-crm.vercel.app/api/cron/scheduled',
+                      headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET>'));
+$$);
+```
+
+### How sending is kept safe
+* Nothing is sent unless a person chose Send now or Schedule, or a manager switched automatic reminders on.
+* The scheduler claims each email with a conditional update, so two overlapping runs cannot both send it. Every send carries a provider idempotency key (email id + revision), so a retry cannot deliver twice.
+* An email is marked **Sent** only when Resend returns a message id. Temporary failures (rate limit, outage, network) are retried after 5, 30 and 120 minutes, then marked **Failed** and the person who scheduled it is notified.
+* A payment reminder is cancelled instead of sent when the invoice has been paid in full or cancelled; recording the final payment or cancelling the invoice also cancels its waiting reminders. Each automatic rule creates at most one reminder per invoice, ever.
+* A follow-up is cancelled when a reply from that address has been recorded in Replies & Engagement (Gmail reply monitoring) after it was scheduled.
+* A sent email can never be edited or re-queued (database trigger), and scheduled emails cannot be deleted, only cancelled.
+
+### Roles
+Existing roles are reused. Invoices, payments, scheduled emails and reminders are available to every team member, as invoices already were. Automatic reminder settings can be changed by admin / accounts / management only. Project finance, revenue, profit and the finance exports follow the existing finance roles (RLS in the database, re-checked in the export route). Money notifications go to administrators and the accounts / management roles.
+
+### Not built in this round
+* Bill / receipt file attachments on expenses (needs a Supabase Storage bucket and policies).
+* Separate Deals, Project Tasks, Team / Staffing and Event Operations modules: the CRM has no such modules yet, so the sidebar lists only pages that exist (leads are the pipeline; follow-ups are the task list).
+* A user-management / roles screen (finance roles are still assigned with the SQL shown above).
+* Native .xlsx and server-generated report PDFs: exports are CSV (opens in Excel) and the browser's Save as PDF.
+* Project profit keeps the existing rule: approved expenses count as cost whether or not the vendor has been paid; paid and unpaid amounts are shown beside it.

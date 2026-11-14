@@ -6,6 +6,8 @@ import {
 } from "@/lib/constants";
 import { isoToIstLocal } from "@/lib/datetime";
 import { listAllLeads } from "@/lib/data/leads";
+import { expenseReport, parseReportFilters, projectReport, type ProjectReportRow } from "@/lib/finance/reports";
+import { getFinanceAccess, type ExpenseRow } from "@/lib/finance/repo";
 import { parseLeadFilters } from "@/lib/lead-filters";
 import { formatLeadNumber } from "@/lib/format";
 import type { Company, Contact, Lead } from "@/lib/types";
@@ -80,6 +82,42 @@ const followUpColumns: CsvColumn<Record<string, string | null>>[] = [
   { header: "notes", value: (f) => f.notes },
 ];
 
+// Finance exports. Amounts are plain numbers (no currency symbol) so Excel can total them.
+const projectFinanceColumns: CsvColumn<ProjectReportRow>[] = [
+  { header: "project", value: (r) => r.name },
+  { header: "client", value: (r) => r.client },
+  { header: "status", value: (r) => r.status },
+  { header: "start_date", value: (r) => r.start_date },
+  { header: "project_value_ex_gst", value: (r) => r.project_value },
+  { header: "invoiced_incl_gst", value: (r) => r.invoiced },
+  { header: "received", value: (r) => r.received },
+  { header: "outstanding_receivable", value: (r) => r.outstanding },
+  { header: "estimated_expenses", value: (r) => r.estimated_expenses },
+  { header: "expenses_approved", value: (r) => r.expenses },
+  { header: "vendor_bills_paid", value: (r) => r.expenses_paid },
+  { header: "vendor_bills_unpaid", value: (r) => r.expenses_unpaid },
+  { header: "gross_profit", value: (r) => r.gross_profit },
+  { header: "margin_pct", value: (r) => r.margin },
+];
+const expenseColumns: CsvColumn<ExpenseRow>[] = [
+  { header: "expense_no", value: (e) => e.expense_code },
+  { header: "date", value: (e) => e.expense_date },
+  { header: "project", value: (e) => e.project_name },
+  { header: "category", value: (e) => e.category_name },
+  { header: "title", value: (e) => e.title },
+  { header: "vendor", value: (e) => e.vendor_name },
+  { header: "bill_number", value: (e) => e.bill_number },
+  { header: "subtotal", value: (e) => e.subtotal },
+  { header: "gst", value: (e) => e.gst_amount },
+  { header: "total", value: (e) => e.total_amount },
+  { header: "paid", value: (e) => e.paid_amount },
+  { header: "outstanding", value: (e) => e.outstanding_amount },
+  { header: "payment_status", value: (e) => e.payment_status },
+  { header: "approval", value: (e) => e.approval_status },
+  { header: "due_date", value: (e) => e.due_date },
+  { header: "notes", value: (e) => e.notes },
+];
+
 async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
   const out: T[] = [];
   for (let offset = 0; offset < 20_000; offset += 1000) {
@@ -118,6 +156,15 @@ export async function GET(request: Request, { params }: RouteContext<"/api/expor
       case "followups":
         csv = toCsv(await fetchAll((f, t) => supabase.from("follow_up_list").select("*").order("due_at").range(f, t)), followUpColumns);
         break;
+      case "finance-projects":
+      case "finance-expenses": {
+        // Same rules as the screens: the finance role is checked here, and RLS still decides which rows come back.
+        const access = await getFinanceAccess(supabase);
+        if (!access.any || (entity === "finance-projects" && !access.seesRevenue)) return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+        const filters = parseReportFilters(Object.fromEntries(url.searchParams));
+        csv = entity === "finance-projects" ? toCsv(await projectReport(supabase, filters), projectFinanceColumns) : toCsv(await expenseReport(supabase, filters), expenseColumns);
+        break;
+      }
       default:
         return NextResponse.json({ error: "Unknown export" }, { status: 404 });
     }

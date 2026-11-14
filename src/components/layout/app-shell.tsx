@@ -3,193 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Building2,
-  CalendarClock,
-  ChevronDown,
-  FileText,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  Package,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Presentation,
-  ReceiptText,
-  Ban,
-  BarChart3,
-  MessageSquareReply,
-  Inbox,
-  LayoutTemplate,
-  Mail,
-  Users,
-  Megaphone,
-  Send,
-  Settings,
-  SlidersHorizontal,
-  Sparkles,
-  Target,
-  UserRound,
-  Wallet,
-  X,
-  FolderKanban,
-  HandCoins,
-  Store,
-  TrendingUp,
-} from "lucide-react";
+import { ChevronDown, FileText, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Plus, Presentation, ReceiptText, Settings, Target, X } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { NotificationBell } from "@/components/layout/notification-bell";
+import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import type { ThemePreference } from "@/lib/theme";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-type NavItem =
-  | {
-      href: string;
-      label: string;
-      icon: React.ComponentType<{ className?: string }>;
-      exact?: boolean;
-    }
-  | { section: string };
-
-const NAV: NavItem[] = [
-  { section: "Overview" },
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/ai-bdm", label: "AI BD Manager", icon: Sparkles },
-  { section: "CRM" },
-  { href: "/leads", label: "Leads", icon: Target },
-  { href: "/companies", label: "Companies", icon: Building2 },
-  { href: "/contacts", label: "Contacts", icon: UserRound },
-  { href: "/followups", label: "Follow-ups", icon: CalendarClock },
-  { section: "Documents" },
-  { href: "/quotations", label: "Quotations", icon: FileText },
-  { href: "/proposals", label: "Proposals", icon: Presentation },
-  { href: "/invoices", label: "Invoices", icon: ReceiptText },
-  { section: "Project Finance" },
-  { href: "/finance", label: "Finance Dashboard", icon: TrendingUp },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/finance/vendors", label: "Vendor Payments", icon: Store },
-  { href: "/finance/reimbursements", label: "Reimbursements", icon: HandCoins },
-  { section: "Operations" },
-  { href: "/products-services", label: "Products & Services", icon: Package },
-  { href: "/payments", label: "Payments", icon: Wallet },
-  { section: "AI Email Marketing" },
-  {
-    href: "/email-marketing",
-    label: "Campaign Dashboard",
-    icon: Megaphone,
-    exact: true,
-  },
-  {
-    href: "/email-marketing/campaigns/new",
-    label: "Create Campaign",
-    icon: Send,
-    exact: true,
-  },
-  {
-    href: "/email-marketing/campaigns",
-    label: "All Campaigns",
-    icon: Mail,
-    exact: true,
-  },
-  { href: "/email-marketing/groups", label: "Recipient Groups", icon: Users },
-  {
-    href: "/email-marketing/templates",
-    label: "Email Templates",
-    icon: LayoutTemplate,
-  },
-  { href: "/email-marketing/outbox", label: "Outbox & Sent", icon: Inbox },
-  {
-    href: "/email-marketing/replies",
-    label: "Replies & Engagement",
-    icon: MessageSquareReply,
-  },
-  {
-    href: "/email-marketing/analytics",
-    label: "Email Analytics",
-    icon: BarChart3,
-  },
-  { href: "/email-marketing/suppressions", label: "Unsubscribed", icon: Ban },
-  {
-    href: "/email-marketing/settings",
-    label: "Email Settings",
-    icon: SlidersHorizontal,
-  },
-  { section: "Administration" },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
-
-function NavLinks({
-  onNavigate,
-  collapsed,
-}: {
-  onNavigate?: () => void;
-  collapsed?: boolean;
-}) {
-  const pathname = usePathname();
-  return (
-    <nav aria-label="Main" className="flex flex-col gap-0.5 px-2.5">
-      {NAV.map((item, idx) => {
-        if ("section" in item) {
-          if (collapsed)
-            return (
-              <div
-                key={item.section}
-                className="my-2 border-t border-nav-hover/60"
-              />
-            );
-          return (
-            <p
-              key={item.section}
-              className={cn(
-                "px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-nav-muted/80",
-                idx === 0 ? "pt-2" : "pt-4",
-              )}
-            >
-              {item.section}
-            </p>
-          );
-        }
-        const { href, label, icon: Icon, exact } = item;
-        const active = exact
-          ? pathname === href
-          : pathname === href || pathname.startsWith(`${href}/`);
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            title={collapsed ? label : undefined}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "group relative flex h-9 items-center gap-3 rounded-md text-sm font-medium text-nav-muted transition-colors hover:bg-nav-hover hover:text-nav-foreground",
-              collapsed ? "justify-center px-0" : "px-3",
-              active &&
-                "bg-nav-active text-nav-foreground font-semibold shadow-xs",
-            )}
-          >
-            <Icon
-              className={cn(
-                "h-4 w-4 shrink-0 transition-transform group-hover:scale-105",
-                active ? "text-accent" : "text-nav-muted",
-              )}
-              aria-hidden
-            />
-            {!collapsed && <span className="truncate">{label}</span>}
-            {active && (
-              <span
-                className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-accent"
-                aria-hidden
-              />
-            )}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
 
 function Brand({ name, collapsed }: { name: string; collapsed?: boolean }) {
   return (
@@ -237,6 +58,10 @@ const ROUTE_LABELS: Record<string, string> = {
   "/invoices": "Invoices",
   "/invoices/new": "New Invoice",
   "/payments": "Payments",
+  "/payment-reminders": "Payment Reminders",
+  "/scheduled-emails": "Scheduled Emails",
+  "/notifications": "Notifications",
+  "/finance/reports": "Finance Reports",
   "/finance": "Finance Dashboard",
   "/finance/vendors": "Vendor Payments",
   "/finance/reimbursements": "Reimbursements",
@@ -320,13 +145,13 @@ export function AppShell({
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "sticky top-0 hidden h-screen shrink-0 flex-col bg-nav transition-[width] duration-200 ease-in-out lg:flex border-r border-nav-hover/60",
+          "sticky top-0 hidden h-screen shrink-0 flex-col bg-nav transition-[width] duration-200 ease-in-out lg:flex border-r border-nav-hover/60 print:!hidden",
           collapsed ? "w-16" : "w-60",
         )}
       >
         <Brand name={businessName} collapsed={collapsed} />
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-1">
-          <NavLinks collapsed={collapsed} />
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-1 [scrollbar-width:thin]">
+          <SidebarNav collapsed={collapsed} isAdmin={isAdmin} />
         </div>
         <div className="mt-auto border-t border-nav-hover/60 p-3">
           <button
@@ -375,7 +200,7 @@ export function AppShell({
             </button>
             <Brand name={businessName} />
             <div className="flex-1 overflow-y-auto py-2">
-              <NavLinks onNavigate={() => setOpen(false)} />
+              <SidebarNav isAdmin={isAdmin} onNavigate={() => setOpen(false)} />
             </div>
             <div className="border-t border-nav-hover/60 p-4">
               <p className="text-center text-[11px] text-nav-muted font-medium">
@@ -388,7 +213,7 @@ export function AppShell({
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-30 flex h-14 print:hidden items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur-md sm:px-6">
           <div className="flex items-center gap-3">
             <button
               className="rounded-md p-1.5 text-foreground/80 hover:bg-surface-muted hover:text-foreground lg:hidden cursor-pointer"

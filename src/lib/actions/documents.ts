@@ -10,7 +10,8 @@ import {
 import { calculateDocument, computeMilestones, type CalcConfig } from "@/lib/documents/calc";
 import { sendEmailWithPdf, emailConfigured } from "@/lib/documents/email";
 import { linesToTerms } from "@/lib/documents/invoice-terms";
-import { renderHtml, renderPdf, pdfFileName } from "@/lib/documents/render";
+import { documentEmailDraft } from "@/lib/documents/email-template";
+import { renderHtml, renderPdf, pdfFileName, type AnyRender } from "@/lib/documents/render";
 import {
   getDocSettings, getInvoiceFull, getProposalFull, getQuotationFull, loadProposalImages, loadProposalRender, todayIST,
 } from "@/lib/documents/repo";
@@ -19,6 +20,7 @@ import {
   sendEmailSchema, type DocumentSettingsValues, type InvoiceFormValues, type InvoiceInput, type ProposalFormValues, type QuotationFormValues,
   type QuotationInput,
 } from "@/lib/documents/schemas";
+import { onInvoiceCancelled, onInvoicePayment } from "@/lib/scheduled/alerts";
 import { fail, friendlyDbError, isUuid, refresh } from "./util";
 
 type DocType = "quotation" | "invoice" | "proposal";
@@ -296,7 +298,8 @@ export async function cancelInvoice(id: string, reason: string): Promise<ActionR
     const { data, error } = await supabase.from("invoices").update({ state: "cancelled", cancel_reason: reason.trim() }).eq("id", id).select("id").maybeSingle();
     if (error) return fail(dbMessage(error));
     if (!data) return fail("Invoice not found.");
-    refresh(["/invoices", `/invoices/${id}`, "/payments"]);
+    await onInvoiceCancelled(supabase, id);
+    refresh(["/invoices", `/invoices/${id}`, "/payments", "/payment-reminders"]);
     return { ok: true };
   });
 }
@@ -308,7 +311,8 @@ export async function recordPayment(invoiceId: string, values: { paid_on: string
     if (!parsed.success) return fail("Please fix the highlighted fields.", fieldErrorsFrom(parsed.error));
     const { error } = await supabase.from("invoice_payments").insert({ invoice_id: invoiceId, ...parsed.data });
     if (error) return fail(dbMessage(error));
-    refresh(["/invoices", `/invoices/${invoiceId}`, "/payments"]);
+    await onInvoicePayment(supabase, invoiceId, Number(parsed.data.amount));
+    refresh(["/invoices", `/invoices/${invoiceId}`, "/payments", "/payment-reminders", "/"]);
     return { ok: true };
   });
 }
@@ -529,7 +533,7 @@ export async function saveSequence(docType: DocType, input: { prefix: string; pa
 }
 
 // ---------------------------------------------------------------------------
-// Preview (of unsaved form state) and email
+// Preview (of unsaved form state)
 // ---------------------------------------------------------------------------
 export async function previewDocument(
   kind: DocType,
@@ -562,29 +566,114 @@ export async function previewDocument(
   });
 }
 
-export async function sendDocumentEmail(type: DocType, id: string, values: { to: string; subject: string; message: string }): Promise<ActionResult<{ providerId: string }>> {
-  return authorized<{ providerId: string }>(async ({ supabase }) => {
-    if (!isUuid(id)) return fail("Document not found.");
+// ---------------------------------------------------------------------------
+// Send by Email
+// ---------------------------------------------------------------------------
+type EmailRow = { client_email?: string | null; client_name?: string | null; client_company?: string | null; contact_id?: string | null; company_id?: string | null };
+
+/** Loads the real document (RLS-scoped to the caller) together with the reason it cannot be emailed, if any. */
+async function loadForEmail(supabase: SupabaseClient, type: DocType, id: string) {
+  let row: EmailRow & Row, render: AnyRender | null, blocked: string | null = null;
+  if (type === "quotation") {
+    const f = await getQuotationFull(supabase, id);
+    if (!f) return null;
+    row = f.row; render = quotationFromRows(f.row, f.items, f.milestones, await getDocSettings());
+  } else if (type === "invoice") {
+    const f = await getInvoiceFull(supabase, id);
+    if (!f) return null;
+    row = f.row; render = invoiceFromRows(f.row, f.items, f.received, todayIST(), await getDocSettings());
+    if (f.row.state === "cancelled") blocked = "This invoice has been cancelled, so it cannot be emailed.";
+  } else {
+    const f = await getProposalFull(supabase, id);
+    if (!f) return null;
+    row = f.row; render = await loadProposalRender(supabase, id);
+  }
+  if (!render) return null;
+  if (!render.number) blocked = "Issue the document (give it a number) before emailing it.";
+  return { row, render, blocked };
+}
+
+/** The client's address: the one saved on the document, else the linked contact's, else a contact of the linked company. */
+async function resolveClientEmail(supabase: SupabaseClient, row: EmailRow): Promise<{ email: string; source: "document" | "contact" | "company" | null }> {
+  const onDoc = row.client_email?.trim();
+  if (onDoc) return { email: onDoc, source: "document" };
+  if (row.contact_id) {
+    const { data } = await supabase.from("contacts").select("email").eq("id", row.contact_id).maybeSingle();
+    if (data?.email?.trim()) return { email: data.email.trim(), source: "contact" };
+  }
+  if (row.company_id) {
+    const { data } = await supabase.from("contacts").select("email").eq("company_id", row.company_id).is("archived_at", null)
+      .not("email_normalized", "is", null).order("created_at").limit(1);
+    if (data?.[0]?.email?.trim()) return { email: data[0].email.trim(), source: "company" };
+  }
+  return { email: "", source: null };
+}
+
+export type DocumentEmailDraft = {
+  enabled: boolean; number: string; to: string; toSource: "document" | "contact" | "company" | null; subject: string; message: string; filename: string;
+};
+
+/** Pre-fills the composer from the actual document and its client. Reads only; nothing is sent. */
+export async function getDocumentEmailDraft(type: DocType, id: string): Promise<ActionResult<DocumentEmailDraft>> {
+  return authorized<DocumentEmailDraft>(async ({ supabase }) => {
+    if (!isUuid(id) || !(type in BASE)) return fail("Document not found.");
+    const doc = await loadForEmail(supabase, type, id);
+    if (!doc) return fail("Document not found.");
+    if (doc.blocked) return fail(doc.blocked);
+    const number = doc.render.number!;
+    const to = await resolveClientEmail(supabase, doc.row);
+    return {
+      ok: true,
+      data: {
+        enabled: emailConfigured(), number, to: to.email, toSource: to.source, filename: pdfFileName(doc.render),
+        ...documentEmailDraft(type, { number, clientName: doc.row.client_name, clientCompany: doc.row.client_company }),
+      },
+    };
+  });
+}
+
+export async function sendDocumentEmail(
+  type: DocType, id: string, values: { to: string; cc?: string; bcc?: string; subject: string; message: string; idempotencyKey?: string },
+): Promise<ActionResult<{ providerId: string; logged: boolean }>> {
+  return authorized<{ providerId: string; logged: boolean }>(async ({ supabase }) => {
+    if (!isUuid(id) || !(type in BASE)) return fail("Document not found.");
     if (!emailConfigured()) return fail("Email sending is not configured on this server (RESEND_API_KEY / EMAIL_FROM).");
     const parsed = sendEmailSchema.safeParse(values);
     if (!parsed.success) return fail("Please fix the highlighted fields.", fieldErrorsFrom(parsed.error));
+    const { to, cc, bcc, subject, message, idempotencyKey } = parsed.data;
 
-    let render;
-    if (type === "quotation") { const f = await getQuotationFull(supabase, id); render = f && quotationFromRows(f.row, f.items, f.milestones, await getDocSettings()); }
-    else if (type === "invoice") { const f = await getInvoiceFull(supabase, id); render = f && invoiceFromRows(f.row, f.items, f.received, todayIST(), await getDocSettings()); }
-    else render = await loadProposalRender(supabase, id);
-    if (!render) return fail("Document not found.");
-    if (!render.number) return fail("Issue the document (give it a number) before emailing it.");
+    const doc = await loadForEmail(supabase, type, id);
+    if (!doc) return fail("Document not found.");
+    if (doc.blocked) return fail(doc.blocked);
+    const filename = pdfFileName(doc.render);
 
-    const { pdf } = await renderPdf(render);
-    const result = await sendEmailWithPdf({ to: parsed.data.to, subject: parsed.data.subject, text: parsed.data.message, filename: pdfFileName(render), pdf });
-    await supabase.from("document_emails").insert({
-      doc_type: type, doc_id: id, to_email: parsed.data.to, subject: parsed.data.subject, body: parsed.data.message,
-      status: result.ok ? "sent" : "failed", provider_id: result.ok ? result.providerId : null, error: result.ok ? null : result.error,
-    });
-    if (!result.ok) return fail(`The email was NOT sent: ${result.error}`);
-    await supabase.rpc("log_document_activity", { p_type: type, p_id: id, p_action: "emailed", p_summary: `Emailed to ${parsed.data.to}`, p_meta: { provider_id: result.providerId } });
+    // Append-only history row. CC/BCC/attachment columns arrive with a later migration: without it the core row is still recorded.
+    const log = async (status: "sent" | "failed", providerId: string | null, error: string | null) => {
+      const core = { doc_type: type, doc_id: id, to_email: to, subject, body: message, status, provider_id: providerId, error };
+      let res = await supabase.from("document_emails").insert({ ...core, cc_emails: cc, bcc_emails: bcc, attachment_name: filename });
+      if (res.error) res = await supabase.from("document_emails").insert(core);
+      if (res.error) console.error("[document email log]", res.error);
+      return !res.error;
+    };
+
+    let pdf: Buffer;
+    try {
+      ({ pdf } = await renderPdf(doc.render));
+    } catch (e) {
+      console.error("[document email pdf]", e);
+      await log("failed", null, "The PDF attachment could not be generated.");
+      refresh([`${BASE[type]}/${id}`]);
+      return fail("The email was NOT sent: the PDF attachment could not be generated. Please try again.");
+    }
+
+    const result = await sendEmailWithPdf({ to, cc, bcc, subject, text: message, filename, pdf, idempotencyKey });
+    const logged = await log(result.ok ? "sent" : "failed", result.ok ? result.providerId : null, result.ok ? null : result.error);
     refresh([`${BASE[type]}/${id}`]);
-    return { ok: true, data: { providerId: result.providerId } };
+    if (!result.ok) return fail(`The email was NOT sent: ${result.error}`);
+    const copies = cc.length + bcc.length;
+    await supabase.rpc("log_document_activity", {
+      p_type: type, p_id: id, p_action: "emailed", p_summary: `Emailed to ${to}${copies ? ` (+${copies} in CC/BCC)` : ""}`, p_meta: { provider_id: result.providerId },
+    });
+    return { ok: true, data: { providerId: result.providerId, logged } };
   });
 }
