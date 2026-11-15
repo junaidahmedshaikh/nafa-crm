@@ -61,6 +61,8 @@ const ROUTE_LABELS: Record<string, string> = {
   "/payment-reminders": "Payment Reminders",
   "/scheduled-emails": "Scheduled Emails",
   "/notifications": "Notifications",
+  "/briefing": "Daily Briefing",
+  "/settings/briefing": "Daily Business Briefing",
   "/finance/reports": "Finance Reports",
   "/finance": "Finance Dashboard",
   "/finance/vendors": "Vendor Payments",

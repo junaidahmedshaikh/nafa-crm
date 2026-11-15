@@ -461,3 +461,20 @@ Run `supabase/migrations/20261120000001_vendor_rates.sql` in the Supabase SQL ed
 * PDF catalogue import with AI extraction, and native `.xlsx` files (CSV only).
 * Images / reference files on a service (needs a Supabase Storage bucket).
 * Picking vendor rates directly inside the project budget form; use the comparison view for the estimate and enter the budget amount by category as before.
+
+## Daily Business Briefing
+
+**Settings → Notifications & Automation → Daily Business Briefing** (`/settings/briefing`). One switch turns on a morning report sent by the server: executive summary, meetings, priority tasks, client follow-ups, sales, quotations and invoices, payment alerts, projects, vendors, project finance and a recommended action plan. History is at `/briefing`; the dashboard shows the latest briefing with *View Full Briefing*.
+
+### Setup
+1. Run `supabase/migrations/20261121000001_daily_briefing.sql` in the Supabase SQL editor (fresh projects: `setup-all.sql` already includes it). Additive: two new tables.
+2. Needs the variables the scheduler already uses (`SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`), `RESEND_API_KEY` + `EMAIL_FROM` for the email, `NEXT_PUBLIC_APP_URL` so the email can link to CRM records, and `GEMINI_API_KEY` for the AI-written summary (without it the summary is written by rule).
+3. In the settings page choose the time, time zone, method (email, in-app or both), recipient and days, press **Send Test Briefing**, then tick **Enable**.
+
+### How it behaves
+* **Facts only.** Every line is read from CRM records when the briefing is generated. The action plan is assembled by rule from those records; the AI only words the summary and is told to use nothing else. A section with nothing recorded prints "No updates".
+* **Not recorded in the CRM** (stated in the report rather than invented): vendor and internal meetings, site visits, meeting links, external calendar events, project milestones, staffing and logistics, vendor confirmations and vendor quotations. There is no calendar integration; meetings are follow-ups of type *meeting* on a lead.
+* **Schedule.** The job runs from the existing cron routes at 08:30 and 10:00 IST. It sends from the chosen delivery time onwards on a delivery day; a time other than 08:30 is exact only when `/api/cron/scheduled` is called every few minutes (see the Scheduler notes above).
+* **No duplicates.** One scheduled briefing per day is enforced by a unique index; a second run finds it and does nothing. The email carries a provider idempotency key. A temporary email failure is retried on the next run (up to 3 attempts), then marked Failed with the reason.
+* **Access.** The briefing contains financial figures: history and reports are readable by administrators and the accounts / management roles only, and only an administrator can change the settings or send a test. The in-app notification goes to administrators.
+* The older sales-only "morning briefing" email in AI BD Manager is separate and off by default; leave it off to avoid two morning emails.

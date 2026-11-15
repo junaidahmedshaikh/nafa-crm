@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Ban, BarChart3, Bell, BellRing, Building2, CalendarClock, ChevronDown, FileBarChart, FileText, FolderKanban, HandCoins, Inbox, LayoutDashboard, LayoutTemplate,
-  Mail, MailCheck, Megaphone, MessageSquareReply, MonitorSmartphone, Package, Presentation, ReceiptText, Send, Settings, SlidersHorizontal, Sparkles, Store,
+  Mail, MailCheck, Megaphone, MessageSquareReply, MonitorSmartphone, Newspaper, Package, Presentation, ReceiptText, Send, Settings, SlidersHorizontal, Sparkles, Store,
   Target, TrendingUp, UserRound, Users, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ type Group = { id: string; label: string; icon: Icon; items: Item[] };
 export const NAV_GROUPS: Group[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, items: [
     { href: "/", label: "Overview", icon: LayoutDashboard },
+    { href: "/briefing", label: "Daily Briefing", icon: Newspaper },
     { href: "/notifications", label: "Notifications", icon: Bell },
     { href: "/ai-bdm", label: "AI BD Manager", icon: Sparkles },
   ] },
@@ -61,6 +62,7 @@ export const NAV_GROUPS: Group[] = [
   { id: "settings", label: "Settings", icon: Settings, items: [
     { href: "/settings", label: "Company & Profile", icon: Settings },
     { href: "/settings/documents", label: "Documents & Bank", icon: FileText },
+    { href: "/settings/briefing", label: "Daily Briefing Setup", icon: Newspaper },
     { href: "/email-marketing/settings", label: "Email Configuration", icon: SlidersHorizontal },
     { href: "/settings/app-installs", label: "App Installations", icon: MonitorSmartphone, adminOnly: true },
   ] },

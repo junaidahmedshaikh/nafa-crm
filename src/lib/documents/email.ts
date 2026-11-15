@@ -13,6 +13,8 @@ export type EmailResult = { ok: true; providerId: string } | { ok: false; error:
 
 export async function sendEmailWithPdf(opts: {
   to: string; cc?: string[]; bcc?: string[]; subject: string; text: string;
+  /** Optional HTML version; `text` is always sent as the plain-text alternative. */
+  html?: string;
   /** Optional PDF attachment. */
   filename?: string; pdf?: Buffer;
   /** Same key => the provider sends at most once, so a double submit or a retry cannot deliver the email twice. */
@@ -30,6 +32,7 @@ export async function sendEmailWithPdf(opts: {
       },
       body: JSON.stringify({
         from, to: [opts.to], subject: opts.subject, text: opts.text,
+        ...(opts.html ? { html: opts.html } : {}),
         ...(opts.cc?.length ? { cc: opts.cc } : {}),
         ...(opts.bcc?.length ? { bcc: opts.bcc } : {}),
         ...(opts.pdf && opts.filename ? { attachments: [{ filename: opts.filename, content: opts.pdf.toString("base64") }] } : {}),

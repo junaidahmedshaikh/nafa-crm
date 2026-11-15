@@ -21,6 +21,7 @@ import {
   OPEN_STATUSES,
   FOLLOW_UP_TYPE_LABELS,
 } from "@/lib/constants";
+import { DashboardBriefing } from "@/components/briefing/dashboard-briefing";
 import { PendingPayments } from "@/components/scheduled/pending-payments";
 import { getDashboardData } from "@/lib/data/dashboard";
 import { listReceivables } from "@/lib/scheduled/repo";
@@ -120,6 +121,7 @@ export default async function DashboardPage() {
         }
       />
 
+      <DashboardBriefing supabase={supabase} />
       <PendingPayments receivables={receivables} />
 
       {/* Financial & Document Metrics */}

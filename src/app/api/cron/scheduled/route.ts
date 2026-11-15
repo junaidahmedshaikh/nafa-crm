@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cronAuthorised } from "@/lib/cron-auth";
 import { runLoggedJob } from "@/lib/bdm/briefing";
+import { runDailyBriefing } from "@/lib/briefing/build";
 import { runScheduledJobs } from "@/lib/scheduled/processor";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -19,7 +20,8 @@ export async function GET(request: Request) {
   try {
     const supabase = createAdminClient();
     const out = await runLoggedJob(supabase, "scheduled_emails", async () => (await runScheduledJobs(supabase)) as never, 2);
-    return NextResponse.json(out, { status: out.ok ? 200 : 500 });
+    const business = await runLoggedJob(supabase, "business_briefing", async () => (await runDailyBriefing(supabase)) as never, 1);
+    return NextResponse.json({ ...out, business }, { status: out.ok && business.ok ? 200 : 500 });
   } catch (e) {
     console.error("[cron scheduled]", e);
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });

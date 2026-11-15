@@ -17,6 +17,7 @@ export default async function SettingsPage() {
       <PageHeader title="Settings" description="Business details, follow-up defaults and your profile. Credentials and integration secrets are never stored here — they live in server environment variables." />
       <div className="max-w-3xl space-y-8">
         <Link href="/settings/documents" className="block rounded-lg border border-border bg-surface p-4 hover:bg-surface-muted"><p className="text-sm font-semibold">Document settings →</p><p className="text-xs text-muted">Bank details, tax defaults, terms and numbering for quotations, proposals and invoices.</p></Link>
+        <Link href="/settings/briefing" className="block rounded-lg border border-border bg-surface p-4 hover:bg-surface-muted"><p className="text-sm font-semibold">Notifications &amp; Automation: Daily Business Briefing →</p><p className="text-xs text-muted">A morning report of meetings, tasks, payments, projects and priorities, by email and in the app.</p></Link>
         <div className="rounded-lg border border-border bg-surface p-4">
           <p className="text-sm font-semibold">Appearance</p>
           <p className="mb-3 mt-0.5 text-xs text-muted">Choose Light, Dark, or follow your device. It is saved to your profile and applied whenever you sign in.</p>
