@@ -61,10 +61,6 @@ export const FOLLOW_UP_TYPE_OPTIONS = options(FOLLOW_UP_TYPES, FOLLOW_UP_TYPE_LA
 
 export const FOLLOW_UP_STATUSES = ["pending", "completed", "cancelled"] as const;
 export type FollowUpStatus = (typeof FOLLOW_UP_STATUSES)[number];
-export const FOLLOW_UP_STATUS_LABELS: Record<FollowUpStatus, string> = {
-  pending: "Pending", completed: "Completed", cancelled: "Cancelled",
-};
-
 export const ACTIVITY_TYPES = [
   "created", "updated", "status_changed", "won", "lost", "note",
   "follow_up_scheduled", "follow_up_completed", "follow_up_rescheduled", "follow_up_cancelled",

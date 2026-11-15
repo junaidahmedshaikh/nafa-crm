@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAGE_SIZE } from "@/lib/constants";
+import { isUuid } from "@/lib/ids";
 import { pageRange, sanitizeSearch } from "@/lib/lead-filters";
 import { aggregateProjects, type CostLine, type SummaryRow } from "./calc";
 
@@ -15,7 +16,6 @@ export async function getFinanceAccess(supabase: SupabaseClient): Promise<Financ
   return { role, any: role !== "none", manage, admin: role === "admin", seesRevenue: manage };
 }
 
-const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 export type Category = { id: string; name: string; sort_order: number; is_active: boolean };
 export type Vendor = { id: string; name: string; gstin: string; phone: string; email: string };

@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAGE_SIZE } from "@/lib/constants";
+import { isUuid } from "@/lib/ids";
 import { pageRange, sanitizeSearch } from "@/lib/lead-filters";
 import type { Company, CompanyRow, Contact, ContactRow, Lead } from "@/lib/types";
 
-const isUuid = (v: string) => /^[0-9a-f-]{36}$/i.test(v);
 
 export async function listCompanies(supabase: SupabaseClient, opts: { q: string; page: number; archived: boolean }) {
   const [from, to] = pageRange(opts.page);

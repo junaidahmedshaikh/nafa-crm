@@ -1,4 +1,4 @@
-import { LEAD_PRIORITY_LABELS, LEAD_STATUS_LABELS, FOLLOW_UP_STATUS_LABELS, type FollowUpStatus, type LeadPriority, type LeadStatus } from "@/lib/constants";
+import { LEAD_PRIORITY_LABELS, LEAD_STATUS_LABELS, type LeadPriority, type LeadStatus } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 type Tone = "neutral" | "info" | "accent" | "success" | "warning" | "danger";
@@ -33,7 +33,3 @@ export function PriorityBadge({ priority }: { priority: LeadPriority }) {
   return <Badge tone={PRIORITY_TONE[priority]}>{LEAD_PRIORITY_LABELS[priority]}</Badge>;
 }
 
-const FU_TONE: Record<FollowUpStatus, Tone> = { pending: "warning", completed: "success", cancelled: "neutral" };
-export function FollowUpStatusBadge({ status }: { status: FollowUpStatus }) {
-  return <Badge tone={FU_TONE[status]}>{FOLLOW_UP_STATUS_LABELS[status]}</Badge>;
-}

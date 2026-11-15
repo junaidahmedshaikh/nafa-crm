@@ -37,7 +37,7 @@ export const NAV_GROUPS: Group[] = [
   ] },
   { id: "operations", label: "Projects & Operations", icon: FolderKanban, items: [
     { href: "/projects", label: "Projects", icon: FolderKanban },
-    { href: "/products-services", label: "Products & Services", icon: Package },
+    { href: "/products-services", label: "Vendor Rates & Services", icon: Package },
   ] },
   { id: "finance", label: "Project Finance", icon: TrendingUp, items: [
     { href: "/finance", label: "Financial Overview", icon: TrendingUp },

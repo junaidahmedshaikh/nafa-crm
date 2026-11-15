@@ -30,6 +30,8 @@ const CSS = `
 .sec .num{color:#6e6e6e;font-weight:400;margin-right:6pt}
 .sec p{margin:0 0 6pt}
 .sec h3{font-size:8.9pt;font-weight:700;margin:8pt 0 3pt}
+.sec strong,.cover .intro strong{font-weight:700}
+.sec em,.cover .intro em{font-style:italic}
 .sec ul{margin:0 0 6pt 12pt}
 .sec li{margin-bottom:2pt}
 .imgs{display:flex;flex-wrap:wrap;gap:8pt;margin:8pt 0 4pt}
@@ -57,20 +59,34 @@ tr{break-inside:avoid}
 .foot{display:flex;justify-content:space-between;font-size:7.8pt;color:#6e6e6e;padding:4pt 3pt 0;white-space:nowrap}
 `;
 
-/** Minimal formatting: blank line = paragraph, "- " = bullet, "## " = sub-heading. Everything is escaped. */
+/**
+ * Inline emphasis as people (and AI drafts) type it: **bold** / __bold__ and *italic*. The text is escaped FIRST, so the
+ * only tags that can appear are the <strong>/<em> added here. Any marker left without a partner is removed rather than printed.
+ */
+export function inlineFormat(text: string): string {
+  return esc(text)
+    .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, "<strong>$1</strong>")
+    .replace(/(?<![\w_])__(?=\S)(.+?)(?<=\S)__(?![\w_])/g, "<strong>$1</strong>")
+    .replace(/(?<![\w*])\*(?=\S)([^*]+?)(?<=\S)\*(?![\w*])/g, "<em>$1</em>")
+    .replace(/\*\*+/g, "");
+}
+/** Headings are already bold: drop any emphasis markers instead of nesting them. */
+const plain = (text: string) => esc(text.replace(/\*\*|__/g, "").replace(/\s+#+\s*$/, "").trim());
+
+/** Minimal formatting: blank line = paragraph, "- " = bullet, "# " / "## " = sub-heading, **bold**, *italic*. Everything is escaped. */
 function formatBody(body: string): string {
   const out: string[] = [];
   let list: string[] = [];
   const flush = () => {
     if (list.length) {
-      out.push(`<ul>${list.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`);
+      out.push(`<ul>${list.map((l) => `<li>${inlineFormat(l)}</li>`).join("")}</ul>`);
       list = [];
     }
   };
   let para: string[] = [];
   const flushPara = () => {
     if (para.length) {
-      out.push(`<p>${para.map(esc).join("<br>")}</p>`);
+      out.push(`<p>${para.map(inlineFormat).join("<br>")}</p>`);
       para = [];
     }
   };
@@ -78,8 +94,8 @@ function formatBody(body: string): string {
     const line = raw.trimEnd();
     if (!line.trim()) { flush(); flushPara(); continue; }
     const bullet = /^\s*[-•*]\s+(.*)$/.exec(line);
-    const h = /^##\s+(.*)$/.exec(line);
-    if (h) { flush(); flushPara(); out.push(`<h3>${esc(h[1])}</h3>`); }
+    const h = /^\s*#{1,6}\s+(.*)$/.exec(line) ?? /^\s*\*\*([^*]+)\*\*:?\s*$/.exec(line);   // "## Title", or a line that is only **Title**
+    if (h) { flush(); flushPara(); out.push(`<h3>${plain(h[1])}</h3>`); }
     else if (bullet) { flushPara(); list.push(bullet[1]); }
     else { flush(); para.push(line); }
   }
@@ -158,7 +174,7 @@ export function renderProposalHtml(d: ProposalRender, opts: RenderOptions = {}):
 <div class="cover">
   <div class="lbl">Prepared for ${esc(d.client.company || d.client.client_name)}</div>
   <h1>${esc(d.title)}</h1>
-  ${cover?.body.trim() ? `<div class="intro">${esc(cover.body)}</div>` : ""}
+  ${cover?.body.trim() ? `<div class="intro">${inlineFormat(cover.body)}</div>` : ""}
   ${cover?.images.length ? `<div class="imgs">${cover.images.map((im) => `<figure><img src="${im.data_uri}" alt="${esc(im.caption)}">${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ""}</figure>`).join("")}</div>` : ""}
 </div>
 ${sections}

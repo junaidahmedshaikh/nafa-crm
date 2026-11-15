@@ -219,7 +219,6 @@ export const productInputSchema = z.object({
   }),
   is_active: z.boolean(),
 });
-export type ProductFormValues = z.input<typeof productInputSchema>;
 
 export const documentSettingsSchema = z.object({
   company_name: reqText("Company name", 200),

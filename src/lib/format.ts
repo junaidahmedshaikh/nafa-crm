@@ -12,10 +12,6 @@ export function formatLeadNumber(n: number | null | undefined): string {
   return n == null ? "—" : `L-${String(n).padStart(4, "0")}`;
 }
 
-export function titleCaseSlug(slug: string): string {
-  return slug.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";

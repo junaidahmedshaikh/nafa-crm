@@ -240,7 +240,7 @@ It renders both PDFs at 150 dpi, writes a side-by-side image and a red/cyan over
 ## Known limitations (Phase 2)
 
 * Concurrency safety comes from Postgres row locks. The automated test fires simultaneous requests at an in-process Postgres (one connection), so it proves the uniqueness/sequence logic rather than multi-connection contention.
-* Proposal images are stored inline in Postgres (≤ 2 MB each, ≤ 30 per proposal) to avoid extra storage setup; move to Supabase Storage if proposals get image-heavy. Images attach only to *saved* sections.
+* Proposal images are stored inline in Postgres (≤ 5 MB each, ≤ 30 per proposal) to avoid extra storage setup; move to Supabase Storage if proposals get image-heavy. Images attach only to *saved* sections.
 * One currency (INR); no credit notes, recurring invoices or partial invoicing against a quotation (use “additional invoice” and edit it).
 * Tax treatment and place of supply are chosen by the user and never inferred; no GST-return or e-invoice (IRN) integration.
 * Email: Resend only; no bounce/delivery webhooks, so a message is recorded as “sent” when the provider accepts it, not when it is delivered.
@@ -415,3 +415,49 @@ Existing roles are reused. Invoices, payments, scheduled emails and reminders ar
 * A user-management / roles screen (finance roles are still assigned with the SQL shown above).
 * Native .xlsx and server-generated report PDFs: exports are CSV (opens in Excel) and the browser's Save as PDF.
 * Project profit keeps the existing rule: approved expenses count as cost whether or not the vendor has been paid; paid and unpaid amounts are shown beside it.
+
+## Code audit and optimisation (November 2026)
+
+### Setup
+Run `supabase/migrations/20261119000001_performance.sql` in the Supabase SQL editor (fresh projects: `setup-all.sql` already includes it). It only adds one read-only function and seven indexes. Until it is run the app keeps working and totals payments the old way.
+
+### What changed
+* **Received total**: the dashboard and Payments page used to download every payment row and add them up in the app, which silently stops at the API row limit. They now call `payments_received_total()` in the database.
+* **PDF route**: responses carry an ETag built from the document's render input and the deployment. When the browser already holds that exact PDF the server answers `304 Not Modified` and skips the Chromium render. The session is still checked on every request; the cache is private to the browser.
+* **Rate limit** on emails a person sends by hand (invoices, quotations, follow-ups, reminders): 60 per user per hour.
+* **One helper each** for UUID checks (`src/lib/ids.ts`) and cron authorisation (`src/lib/cron-auth.ts`), replacing six and four copies.
+* **Removed**: five unused create-next-app SVGs from `public/`, and eleven exports nothing referenced.
+* `@types/web-push` moved to devDependencies; the browser Supabase client now accepts either key name, like the server.
+
+### Known debt
+* Email-marketing analytics and the campaign queue read whole tables into memory with limits above the API row cap; large lists need database-side aggregation.
+* The Content-Security-Policy has no `script-src` (Next.js needs nonces for that).
+* `npm audit` reports issues in development-only tooling (ESLint toolchain, `pdfjs-dist` used by tests). Production dependencies report none.
+* `setMilestonePaid` and `saveVendor` are server actions with no screen calling them yet.
+
+## Vendor Rates & Services (was Products & Services)
+
+`/products-services` is now the **Vendor Rate Catalogue**. It reuses the existing `vendors` table (already linked to project expenses) and the `products_services` catalogue; nothing was deleted or renamed in the database.
+
+| View | What it shows |
+| --- | --- |
+| Vendors | Vendor list with category, contact, location, rating and number of rates. Search and filter by category, status and city. Each vendor has a profile page with contact, business details, ratings, services and rates, and the rate history. |
+| Service catalogue & rates | Every vendor rate. Search by service, vendor or category; filter by vendor category, service category, rate type, location, GST, validity and price range. |
+| Compare vendors | One service, every vendor side by side: rate, GST, transport, installation, other charges, final estimated cost, validity, location, rating. Sort by lowest, highest or rating. Nothing is selected automatically. |
+| Quotation items | The original catalogue of items and **selling** rates used by the quotation and invoice builders (unchanged). |
+
+### Setup
+Run `supabase/migrations/20261120000001_vendor_rates.sql` in the Supabase SQL editor (fresh projects: `setup-all.sql` already includes it). It adds columns to `vendors`, three tables, two views and one trigger. Until it is run the page shows a setup notice and the Quotation items view keeps working.
+
+### Rules
+* **Confidential**: vendor rates are readable only by people with a finance role and writable only by admin / accounts / management (row-level security). Quotations and invoices have no field that can hold a vendor or a purchase cost.
+* **Rate history**: a database trigger saves the previous price, charges, GST, unit, effective dates, the person and the reason on every price change. History rows cannot be edited or deleted; a rate is deactivated, never deleted.
+* **No duplicates**: one vendor per name, one catalogue item per name, one live rate per vendor + service + rate type.
+* **Estimated cost** = (rate for one unit + installation + transport + other charges) + GST. A reference only; actual purchases are still recorded as project expenses and stay separate.
+* **Quotation builder**: *Vendor cost lookup* searches the rates, applies a markup or margin you choose, and adds a line with only the service name and the selling price. The price stays editable.
+* **Import / export**: download the template (opens in Excel), save as CSV, upload, review every row with its errors, then approve. Existing vendors and services are matched by name; an existing rate is updated and its old price kept. Export uses the same columns.
+
+### Not built in this round
+* PDF catalogue import with AI extraction, and native `.xlsx` files (CSV only).
+* Images / reference files on a service (needs a Supabase Storage bucket).
+* Picking vendor rates directly inside the project budget form; use the comparison view for the estimate and enter the budget amount by category as before.

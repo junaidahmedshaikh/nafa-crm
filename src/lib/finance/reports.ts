@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isUuid } from "@/lib/ids";
 import { profitAndLoss, type SummaryRow } from "./calc";
 import type { ExpenseRow } from "./repo";
 
-const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 export type ReportFilters = { project: string; client: string; from: string; to: string; category: string; paid: string };

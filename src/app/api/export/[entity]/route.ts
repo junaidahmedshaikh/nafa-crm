@@ -8,6 +8,8 @@ import { isoToIstLocal } from "@/lib/datetime";
 import { listAllLeads } from "@/lib/data/leads";
 import { expenseReport, parseReportFilters, projectReport, type ProjectReportRow } from "@/lib/finance/reports";
 import { getFinanceAccess, type ExpenseRow } from "@/lib/finance/repo";
+import { importTemplateCsv } from "@/lib/vendors/core";
+import type { RateRow } from "@/lib/vendors/repo";
 import { parseLeadFilters } from "@/lib/lead-filters";
 import { formatLeadNumber } from "@/lib/format";
 import type { Company, Contact, Lead } from "@/lib/types";
@@ -118,6 +120,33 @@ const expenseColumns: CsvColumn<ExpenseRow>[] = [
   { header: "notes", value: (e) => e.notes },
 ];
 
+// Same headings as the import template, so an export can be edited in Excel and imported again.
+const vendorRateColumns: CsvColumn<RateRow & { contact_person?: string; phone?: string; email?: string; state?: string; gstin?: string }>[] = [
+  { header: "vendor_name", value: (r) => r.vendor_name },
+  { header: "vendor_category", value: (r) => r.vendor_category },
+  { header: "contact_person", value: (r) => r.contact_person },
+  { header: "phone", value: (r) => r.phone },
+  { header: "email", value: (r) => r.email },
+  { header: "city", value: (r) => r.vendor_city },
+  { header: "state", value: (r) => r.state },
+  { header: "gstin", value: (r) => r.gstin },
+  { header: "service_name", value: (r) => r.product_name },
+  { header: "service_category", value: (r) => r.product_category },
+  { header: "description", value: (r) => r.specifications },
+  { header: "rate_type", value: (r) => r.rate_type },
+  { header: "unit", value: (r) => r.unit },
+  { header: "rate", value: (r) => r.rate },
+  { header: "setup_charges", value: (r) => r.setup_charges },
+  { header: "transport_charges", value: (r) => r.transport_charges },
+  { header: "other_charges", value: (r) => r.other_charges },
+  { header: "gst_percent", value: (r) => r.gst_percent },
+  { header: "min_order_qty", value: (r) => r.min_order_qty },
+  { header: "valid_until", value: (r) => r.valid_until },
+  { header: "service_location", value: (r) => r.service_location },
+  { header: "notes", value: (r) => r.notes },
+  { header: "estimated_cost", value: (r) => r.estimated_cost },
+];
+
 async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
   const out: T[] = [];
   for (let offset = 0; offset < 20_000; offset += 1000) {
@@ -163,6 +192,19 @@ export async function GET(request: Request, { params }: RouteContext<"/api/expor
         if (!access.any || (entity === "finance-projects" && !access.seesRevenue)) return NextResponse.json({ error: "Not authorised" }, { status: 403 });
         const filters = parseReportFilters(Object.fromEntries(url.searchParams));
         csv = entity === "finance-projects" ? toCsv(await projectReport(supabase, filters), projectFinanceColumns) : toCsv(await expenseReport(supabase, filters), expenseColumns);
+        break;
+      }
+      case "vendor-rate-template":
+        csv = importTemplateCsv();
+        break;
+      case "vendor-rates": {
+        // Purchase rates are confidential: a finance role is required here, and RLS applies to the rows as well.
+        const access = await getFinanceAccess(supabase);
+        if (!access.any) return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+        const rates = await fetchAll<RateRow>((f, t) => supabase.from("vendor_rate_list").select("*").eq("is_active", true).order("vendor_name").order("product_name").range(f, t));
+        const { data: vs } = await supabase.from("vendors").select("id, contact_person, phone, email, state, gstin").is("deleted_at", null).limit(5000);
+        const byId = new Map((vs ?? []).map((v) => [v.id as string, v]));
+        csv = toCsv(rates.map((r) => ({ ...r, ...(byId.get(r.vendor_id) ?? {}), id: r.id })), vendorRateColumns);
         break;
       }
       default:

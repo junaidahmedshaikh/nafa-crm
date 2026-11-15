@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/layout";
 import { Modal } from "@/components/ui/modal";
 import { ClientSection, PreviewPane } from "@/components/documents/builder-parts";
 import { deleteProposalImage, previewDocument, saveProposal, uploadProposalImage } from "@/lib/actions/documents";
+import { shrinkImage } from "@/lib/image-shrink";
 import type { LeadOption } from "@/lib/documents/repo";
 import { PROPOSAL_SECTION_TITLES, PROPOSAL_SECTION_TYPES, proposalInputSchema, type ProposalFormValues, type ProposalInput } from "@/lib/documents/schemas";
 import { formatINR } from "@/lib/format";
@@ -40,7 +41,7 @@ function ImageUploader({ proposalId, sectionId, attachments }: { proposalId: str
         <p className="text-xs font-semibold uppercase tracking-wider text-muted">
           Images &amp; Moodboard {sectionAttachments.length > 0 && `(${sectionAttachments.length})`}
         </p>
-        <span className="text-[11px] text-muted">PNG, JPG, WebP · max 2 MB</span>
+        <span className="text-[11px] text-muted">PNG, JPG, WebP · max 5 MB</span>
       </div>
 
       {sectionAttachments.length > 0 && (
@@ -162,12 +163,21 @@ function ImageUploader({ proposalId, sectionId, attachments }: { proposalId: str
           onClick={() => {
             const file = fileRef.current?.files?.[0];
             if (!file) return toast.error("Choose an image first.");
-            const fd = new FormData();
-            fd.set("file", file);
-            fd.set("section_id", sectionId);
-            fd.set("caption", caption);
+            if (file.size > 5 * 1024 * 1024) return toast.error("Images must be 5 MB or smaller.");
             startTransition(async () => {
-              const r = await uploadProposalImage(proposalId, fd);
+              const fd = new FormData();
+              // Photos above 3.5 MB are re-encoded in the browser so the upload fits the hosting request limit.
+              fd.set("file", await shrinkImage(file));
+              fd.set("section_id", sectionId);
+              fd.set("caption", caption);
+              let r: Awaited<ReturnType<typeof uploadProposalImage>>;
+              try {
+                r = await uploadProposalImage(proposalId, fd);
+              } catch {
+                // The request never reached the action (for example the host refused the body size).
+                toast.error("The image could not be uploaded. Try a smaller file.");
+                return;
+              }
               if (r.ok) {
                 toast.success("Image added to proposal");
                 setCaption("");

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getMember } from "@/lib/auth";
 import { pdfFileName, renderPdf } from "@/lib/documents/render";
@@ -6,6 +7,11 @@ import { loadInvoiceRender, loadProposalRender, loadQuotationRender } from "@/li
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+// Private to this browser and re-checked on every request (the session is verified before a 304 is ever returned).
+const CACHE = "private, no-cache, must-revalidate";
+// A new deployment may change the templates, so the build is part of the fingerprint.
+const BUILD = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.VERCEL_DEPLOYMENT_ID ?? "local";
 
 /** GET /api/documents/{quotation|invoice|proposal}/{id}/pdf[?download=1] — authenticated, RLS-scoped. */
 export async function GET(request: Request, { params }: RouteContext<"/api/documents/[type]/[id]/pdf">) {
@@ -29,6 +35,11 @@ export async function GET(request: Request, { params }: RouteContext<"/api/docum
   }
   if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 });
 
+  // The render input fully determines the PDF. If the browser already has this exact version, answer 304 and skip
+  // the 1-2 second Chromium render (the detail pages embed this PDF on every visit).
+  const etag = `"${createHash("sha256").update(BUILD).update(JSON.stringify(doc)).digest("base64url").slice(0, 32)}"`;
+  if (request.headers.get("if-none-match") === etag) return new NextResponse(null, { status: 304, headers: { ETag: etag, "Cache-Control": CACHE } });
+
   try {
     const { pdf } = await renderPdf(doc);
     const download = new URL(request.url).searchParams.get("download") === "1";
@@ -36,7 +47,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/docum
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${pdfFileName(doc)}"`,
-        "Cache-Control": "private, no-store",
+        "Cache-Control": CACHE,
+        ETag: etag,
       },
     });
   } catch (e) {

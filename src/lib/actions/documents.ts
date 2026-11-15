@@ -21,6 +21,7 @@ import {
   type QuotationInput,
 } from "@/lib/documents/schemas";
 import { onInvoiceCancelled, onInvoicePayment } from "@/lib/scheduled/alerts";
+import { limitUser, TOO_MANY } from "@/lib/rate-limit";
 import { fail, friendlyDbError, isUuid, refresh } from "./util";
 
 type DocType = "quotation" | "invoice" | "proposal";
@@ -442,7 +443,7 @@ export async function uploadProposalImage(proposalId: string, formData: FormData
     const sectionId = String(formData.get("section_id") ?? "");
     const caption = String(formData.get("caption") ?? "").trim().slice(0, 200);
     if (!(file instanceof File) || file.size === 0) return fail("Choose an image to upload.");
-    if (file.size > 2 * 1024 * 1024) return fail("Images must be 2 MB or smaller.");
+    if (file.size > 5 * 1024 * 1024) return fail("Images must be 5 MB or smaller.");
     if (!isUuid(sectionId)) return fail("Save the proposal first, then add images to a saved section.");
     const bytes = Buffer.from(await file.arrayBuffer());
     const type = file.type;
@@ -635,8 +636,9 @@ export async function getDocumentEmailDraft(type: DocType, id: string): Promise<
 export async function sendDocumentEmail(
   type: DocType, id: string, values: { to: string; cc?: string; bcc?: string; subject: string; message: string; idempotencyKey?: string },
 ): Promise<ActionResult<{ providerId: string; logged: boolean }>> {
-  return authorized<{ providerId: string; logged: boolean }>(async ({ supabase }) => {
+  return authorized<{ providerId: string; logged: boolean }>(async ({ supabase, user }) => {
     if (!isUuid(id) || !(type in BASE)) return fail("Document not found.");
+    if (!(await limitUser(user.id, "docEmail"))) return fail(TOO_MANY);
     if (!emailConfigured()) return fail("Email sending is not configured on this server (RESEND_API_KEY / EMAIL_FROM).");
     const parsed = sendEmailSchema.safeParse(values);
     if (!parsed.success) return fail("Please fix the highlighted fields.", fieldErrorsFrom(parsed.error));

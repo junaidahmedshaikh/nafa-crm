@@ -67,7 +67,6 @@ export const projectInputSchema = z
     invoice_ids: z.array(z.string().uuid()).default([]),
   })
   .refine((v) => !v.start_date || !v.end_date || v.end_date >= v.start_date, { path: ["end_date"], message: "End date is before the start date" });
-export type ProjectInput = z.output<typeof projectInputSchema>;
 
 export const expenseInputSchema = z.object({
   project_id: z.string().uuid("Choose a project"),
@@ -95,7 +94,6 @@ export const expenseInputSchema = z.object({
   due_date: optDate,
   notes: optText(1000),
 });
-export type ExpenseInput = z.output<typeof expenseInputSchema>;
 
 export const expensePaymentSchema = z.object({
   paid_on: reqDate("Payment date"),
@@ -104,7 +102,6 @@ export const expensePaymentSchema = z.object({
   reference: optText(100),
   notes: optText(500),
 });
-export type ExpensePaymentInput = z.output<typeof expensePaymentSchema>;
 
 export const budgetRowsSchema = z.array(z.object({ category_id: z.string().uuid(), amount: money("budget") })).max(100);
 
@@ -115,7 +112,6 @@ export const revenueItemSchema = z.object({
   approved: z.boolean(),
   item_date: reqDate("Date"),
 });
-export type RevenueItemInput = z.output<typeof revenueItemSchema>;
 
 export const reimbursementSchema = z.object({
   person_name: reqText("Person name", 200),
@@ -126,7 +122,6 @@ export const reimbursementSchema = z.object({
   amount: positiveMoney("amount"),
   expense_id: optUuid,
 });
-export type ReimbursementInput = z.output<typeof reimbursementSchema>;
 
 export const categorySchema = z.object({ name: reqText("Category name", 100) });
 export const vendorSchema = z.object({

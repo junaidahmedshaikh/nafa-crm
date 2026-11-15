@@ -3,6 +3,7 @@
 import { authorized } from "@/lib/auth";
 import type { ActionResult } from "@/lib/types";
 import { fail, isUuid, refresh } from "@/lib/actions/util";
+import { limitUser, TOO_MANY } from "@/lib/rate-limit";
 import { fieldErrorsFrom } from "@/lib/validation/common";
 import {
   NOTIFICATION_TYPES, RELATED_PATH, RELATED_TYPES, reminderSettingsSchema, scheduledEmailSchema, zonedToIso, type RelatedType, type ScheduledEmailValues,
@@ -38,6 +39,7 @@ export type SaveMode = "draft" | "schedule" | "now";
 export async function saveScheduledEmail(values: ScheduledEmailValues, mode: SaveMode, id?: string): Promise<ActionResult<{ id: string; status: string; message: string }>> {
   return authorized<{ id: string; status: string; message: string }>(async ({ supabase, user }) => {
     if (!["draft", "schedule", "now"].includes(mode)) return fail("Unknown action.");
+    if (mode === "now" && !(await limitUser(user.id, "docEmail"))) return fail(TOO_MANY);
     if (id && !isUuid(id)) return fail("Email not found.");
     const parsed = scheduledEmailSchema.safeParse(values);
     if (!parsed.success) return fail("Please fix the highlighted fields.", fieldErrorsFrom(parsed.error));
@@ -108,8 +110,9 @@ export async function cancelScheduledEmail(id: string): Promise<ActionResult> {
 
 /** Sends a draft / scheduled / failed email immediately. The person clicking is the approval. */
 export async function sendScheduledNow(id: string): Promise<ActionResult<{ message: string }>> {
-  return authorized<{ message: string }>(async ({ supabase }) => {
+  return authorized<{ message: string }>(async ({ supabase, user }) => {
     if (!isUuid(id)) return fail("Email not found.");
+    if (!(await limitUser(user.id, "docEmail"))) return fail(TOO_MANY);
     const { data: cur } = await supabase.from("scheduled_emails").select("revision, to_email, subject, body, related_type, related_id").eq("id", id).maybeSingle();
     if (!cur) return fail("Email not found.");
     if (!cur.to_email || !cur.subject || !cur.body) return fail("Complete the recipient, subject and message before sending.");

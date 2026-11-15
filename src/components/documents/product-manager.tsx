@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { DataTable, Td, Th } from "@/components/ui/layout";
+import { DeleteButton } from "@/components/vendors/vendor-ui";
 import { saveProduct } from "@/lib/actions/documents";
 import type { Product } from "@/lib/documents/repo";
 import { formatINR } from "@/lib/format";
 
-export function ProductManager({ rows }: { rows: Product[] }) {
+export function ProductManager({ rows, canDelete = false }: { rows: Product[]; canDelete?: boolean }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -44,6 +45,7 @@ export function ProductManager({ rows }: { rows: Product[] }) {
               <Td className="whitespace-nowrap text-right">
                 <Button size="icon" variant="ghost" onClick={() => setEditing(r)} aria-label={`Edit ${r.name}`}><Pencil className="h-4 w-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => toggle(r)} disabled={pending}>{r.is_active ? "Deactivate" : "Activate"}</Button>
+                {canDelete && <DeleteButton kind="item" id={r.id} name={r.name} />}
               </Td>
             </tr>
           ))}

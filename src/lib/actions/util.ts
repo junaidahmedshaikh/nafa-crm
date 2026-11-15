@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/types";
 
-export const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+export { isUuid } from "@/lib/ids";
 
 export function fail(error: string, fieldErrors?: Record<string, string>, code?: string): { ok: false; error: string; fieldErrors?: Record<string, string>; code?: string } {
   return { ok: false, error, fieldErrors, code };

@@ -4,6 +4,7 @@ import {
 } from "@/lib/constants";
 import { istMonthStart } from "@/lib/datetime";
 import { followUpTabCounts } from "@/lib/data/followups";
+import { paymentsReceivedTotal } from "@/lib/documents/totals";
 import type { FollowUpRow, Lead } from "@/lib/types";
 
 export type DashboardData = {
@@ -47,7 +48,7 @@ export async function getDashboardData(supabase: SupabaseClient, now = new Date(
     qAccepted,
     invOutstanding,
     invOverdue,
-    paysRes,
+    totalReceived,
   ] = await Promise.all([
     leadCount().in("status", OPEN_STATUSES),
     leadCount().gte("created_at", monthStart.toISOString()),
@@ -68,7 +69,7 @@ export async function getDashboardData(supabase: SupabaseClient, now = new Date(
     supabase.from("quotations").select("id", { count: "exact", head: true }).eq("status", "accepted"),
     supabase.from("invoices").select("id", { count: "exact", head: true }).eq("state", "issued"),
     supabase.from("invoice_list").select("id", { count: "exact", head: true }).eq("payment_status", "overdue"),
-    supabase.from("invoice_payments").select("amount").is("voided_at", null),
+    paymentsReceivedTotal(supabase),
   ]);
 
   const byStatus = new Map<string, { count: number; revenue: number }>();
@@ -77,7 +78,6 @@ export async function getDashboardData(supabase: SupabaseClient, now = new Date(
   }
 
   const ist = new Date(monthStart.getTime() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-  const totalReceived = (paysRes.data ?? []).reduce((sum, p) => sum + Number((p as { amount?: number | string }).amount || 0), 0);
 
   return {
     metrics: {

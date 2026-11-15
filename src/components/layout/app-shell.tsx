@@ -67,7 +67,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/finance/reimbursements": "Reimbursements",
   "/projects": "Projects",
   "/projects/new": "New Project",
-  "/products-services": "Products & Services",
+  "/products-services": "Vendor Rates & Services",
   "/settings": "Settings",
   "/settings/documents": "Document Settings",
   "/settings/app-installs": "App Installations",

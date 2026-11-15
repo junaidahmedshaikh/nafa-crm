@@ -139,7 +139,6 @@ export const NOTIFICATION_TYPES = {
   bdm_briefing: "Morning briefing",
   app_install: "App installed",
 } as const;
-export type NotificationType = keyof typeof NOTIFICATION_TYPES;
 export const notificationLabel = (t: string) => (NOTIFICATION_TYPES as Record<string, string>)[t] ?? t.replace(/_/g, " ");
 
 // ---------------------------------------------------------------------------

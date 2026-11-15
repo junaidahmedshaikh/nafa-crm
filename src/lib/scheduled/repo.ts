@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAGE_SIZE } from "@/lib/constants";
+import { isUuid } from "@/lib/ids";
 import { pageRange, sanitizeSearch } from "@/lib/lead-filters";
 import { followUpDraft, fillReminderTemplate, invoiceOpen, SCHEDULE_STATUSES, type RelatedType, type ReminderSettings } from "./core";
 import type { ScheduledRow } from "./processor";
 
-const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 export type ScheduledListRow = ScheduledRow & { assignee: { full_name: string } | null };
 
@@ -25,7 +25,6 @@ export async function listScheduledEmails(
   return { rows: (data ?? []) as unknown as ScheduledListRow[], total: count ?? 0, pageSize: PAGE_SIZE, setupNeeded: false };
 }
 
-export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = { enabled: false, offsets: [-7, -3, -1, 0, 3, 7, 15], send_hour: 10, subject: "", body: "" };
 
 export async function getReminderSettings(supabase: SupabaseClient): Promise<ReminderSettings | null> {
   const { data } = await supabase.from("payment_reminder_settings").select("enabled, offsets, send_hour, subject, body").maybeSingle();

@@ -105,7 +105,6 @@ export const followUpSchema = z.object({
   notes: optText(2000),
 });
 export type FollowUpFormInput = z.input<typeof followUpSchema>;
-export type FollowUpFormData = z.output<typeof followUpSchema>;
 
 export const rescheduleSchema = z.object({ due_at: reqDateTime("Due date and time") });
 

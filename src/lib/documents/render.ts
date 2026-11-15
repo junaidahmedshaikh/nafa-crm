@@ -18,7 +18,6 @@ export async function renderPdf(doc: AnyRender) {
   return htmlToPdf(renderHtml(doc));
 }
 
-export const DOC_LABEL = { quotation: "Quotation", invoice: "Invoice", proposal: "Proposal" } as const;
 
 /**
  * Sanitizes a client company or contact identifier to create a clean,

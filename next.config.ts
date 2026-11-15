@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
     "/**": ["./src/assets/**"],
   },
   serverExternalPackages: ["playwright-core", "@sparticuz/chromium"],
+  // Server Actions accept 1 MB by default. Proposal images may be up to 5 MB; the extra room is for the multipart envelope.
+  experimental: { serverActions: { bodySizeLimit: "6mb" } },
   turbopack: {
     root: import.meta.dirname,
     rules: {

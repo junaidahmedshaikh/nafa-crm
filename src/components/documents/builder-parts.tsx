@@ -1,5 +1,6 @@
 "use client";
 
+import { VendorRatePicker } from "@/components/vendors/rate-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useFormContext, useWatch, type UseFormReturn } from "react-hook-form";
 import { ArrowDown, ArrowUp, ExternalLink, Maximize2, Plus, Trash2 } from "lucide-react";
@@ -126,6 +127,7 @@ export function ItemsEditor({ catalogue, showHsn }: { catalogue: Product[]; show
               {catalogue.map((p) => <option key={p.id} value={p.id}>{p.name} — {formatINR(p.default_rate)}/{p.unit}</option>)}
             </Select>
           )}
+          <VendorRatePicker onAdd={(l) => append({ catalogue_id: l.catalogue_id, description: l.description, notes: "", hsn_sac: "", qty: "1", rate: l.rate, discount: { type: "", value: "" } })} />
           <Button size="sm" onClick={() => append({ catalogue_id: "", description: "", notes: "", hsn_sac: "", qty: "1", rate: "", discount: { type: "", value: "" } })}>
             <Plus className="h-4 w-4" aria-hidden />Custom item
           </Button>

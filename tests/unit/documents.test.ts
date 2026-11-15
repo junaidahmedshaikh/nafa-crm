@@ -136,6 +136,25 @@ describe("proposal template", () => {
     expect(missingSections([{ type: "scope", title: "Scope of work", body: "", included: true }, { type: "timeline", title: "Timeline", body: "x", included: true }, { type: "terms", title: "Terms", body: "", included: false }]))
       .toEqual(["Scope of work"]);
   });
+  it("turns **bold** and *italic* markers into formatting and never prints stray asterisks", () => {
+    const body = [
+      "**Our Approach**", "We deliver **end-to-end** production with *zero* compromise.", "", "- **Stage:** 40 x 20 ft", "- Sound & *lighting*",
+      "", "### Timeline", "Cost is 2 * 3 * 4 units, **unfinished bold", "**<script>x</script>**", "snake_case_name and __strong__ text",
+    ].join("\n");
+    const html = renderProposalHtml({ ...base, sections: [{ type: "cover", title: "Cover", body: "A **bold** intro", images: [] }, { type: "overview", title: "Overview", body, images: [] }] });
+    const text = html.slice(html.indexOf("</style>"));
+    expect(text).toContain("<h3>Our Approach</h3>");
+    expect(text).toContain("We deliver <strong>end-to-end</strong> production with <em>zero</em> compromise.");
+    expect(text).toContain("<li><strong>Stage:</strong> 40 x 20 ft</li>");
+    expect(text).toContain("<li>Sound &amp; <em>lighting</em></li>");
+    expect(text).toContain("<h3>Timeline</h3>");
+    expect(text).toContain("Cost is 2 * 3 * 4 units, unfinished bold");
+    expect(text).toContain("snake_case_name and <strong>strong</strong> text");
+    expect(text).toContain("A <strong>bold</strong> intro");
+    expect(text).not.toContain("**");
+    expect(text).not.toContain("<script>x</script>");
+    expect(text).toContain("&lt;script&gt;x&lt;/script&gt;");
+  });
   it("escapes section content", () => {
     const html = renderProposalHtml({ ...base, sections: [{ type: "overview", title: "<b>x</b>", body: "<script>1</script>", images: [] }] });
     expect(html).not.toContain("<script>1</script>");

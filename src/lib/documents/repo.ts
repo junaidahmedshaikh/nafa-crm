@@ -1,8 +1,10 @@
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PAGE_SIZE } from "@/lib/constants";
+import { isUuid } from "@/lib/ids";
 import { pageRange, sanitizeSearch } from "@/lib/lead-filters";
 import { createClient } from "@/lib/supabase/server";
+import { paymentsReceivedTotal } from "./totals";
 import {
   assembleProposal, invoiceFromRows, quotationFromRows, settingsToCompany, type DocSettings, type InvoiceRow, type MilestoneDbRow, type ProposalRow, type QuotationRow,
 } from "./build";
@@ -112,15 +114,12 @@ export async function listPayments(supabase: SupabaseClient, p: { q: string; met
   if (!p.includeVoided) query = query.is("voided_at", null);
   const { data, count, error } = await query.order("paid_on", { ascending: false }).order("created_at", { ascending: false }).range(from, to);
   if (error) throw new Error(`Could not load payments: ${error.message}`);
-  const { data: totals } = await supabase.from("payment_list").select("amount").is("voided_at", null).limit(5000);
-  const sum = (totals ?? []).reduce((a, r) => a + Number(r.amount), 0);
-  return { rows: (data ?? []) as PaymentListRow[], total: count ?? 0, pageSize: PAGE_SIZE, receivedTotal: Math.round(sum * 100) / 100 };
+  return { rows: (data ?? []) as PaymentListRow[], total: count ?? 0, pageSize: PAGE_SIZE, receivedTotal: await paymentsReceivedTotal(supabase) };
 }
 
 // ---------------------------------------------------------------------------
 // Single documents
 // ---------------------------------------------------------------------------
-const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 type Item = Parameters<typeof quotationFromRows>[1][number];
 

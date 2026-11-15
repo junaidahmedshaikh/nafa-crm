@@ -16,18 +16,6 @@ export type AudienceFilters = {
   emailVerifiedOnly?: boolean;    // only contacts whose email status is "valid"
 };
 
-export const AUDIENCE_PRESETS: { key: string; label: string; industry?: string; category?: string }[] = [
-  { key: "all", label: "All CRM contacts" },
-  { key: "wedding_planners", label: "Wedding planners", category: "wedding_planners", industry: "wedding" },
-  { key: "wedding_decorators", label: "Wedding decorators", category: "wedding_decorators", industry: "decor" },
-  { key: "event_agencies", label: "Event management companies", category: "event_agencies", industry: "event" },
-  { key: "corporate_hr", label: "Corporate HR & Admin", category: "corporate_hr", industry: "corporate" },
-  { key: "advertising_agencies", label: "Advertising agencies", category: "advertising_agencies", industry: "advertis" },
-  { key: "digital_agencies", label: "Digital marketing agencies", category: "digital_agencies", industry: "digital" },
-  { key: "hotels_venues", label: "Hotels & banquet venues", category: "hotels_venues", industry: "hotel" },
-  { key: "activation_agencies", label: "Brand activation agencies", category: "activation_agencies", industry: "activation" },
-];
-
 export type ContactRow = {
   id: string;
   fullName: string;
