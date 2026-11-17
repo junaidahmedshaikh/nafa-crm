@@ -53,6 +53,6 @@ export async function GET(request: Request, { params }: RouteContext<"/api/docum
     });
   } catch (e) {
     console.error("[pdf render]", e);
-    return NextResponse.json({ error: (e as Error).message.startsWith("PDF engine unavailable") ? (e as Error).message : "PDF generation failed" }, { status: 500 });
+    return NextResponse.json({ error: (e as Error).message.startsWith("PDF engine unavailable") ? (e as Error).message : `PDF generation failed: ${(e as Error).message.split("\n")[0].slice(0, 300)}` }, { status: 500 });
   }
 }
