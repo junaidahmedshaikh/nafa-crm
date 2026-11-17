@@ -10,6 +10,15 @@ import type { Browser } from "playwright-core";
  */
 let browser: Promise<Browser> | null = null;
 
+/** Rejects with a stage-named error instead of letting a hung step run into the platform's function timeout. */
+function within<T>(stage: string, ms: number, work: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${stage} timed out after ${ms / 1000}s`)), ms);
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+
 async function launch(): Promise<Browser> {
   // Loaded on demand: only generating a PDF needs the browser library. A top-level import made every document
   // action (cancel, void, record payment...) load it, and a packaging problem there broke all of them.
@@ -32,7 +41,7 @@ async function launch(): Promise<Browser> {
 
 async function getBrowser(): Promise<Browser> {
   if (!browser) {
-    browser = launch().catch((e) => {
+    browser = within("Chromium launch", 25_000, launch()).catch((e) => {
       browser = null;
       throw new Error(
         `PDF engine unavailable: ${(e as Error).message.split("\n")[0]}. Run "npx playwright-core install chromium" or set PDF_CHROMIUM_PATH.`,
@@ -56,9 +65,9 @@ async function renderOnce(html: string): Promise<Buffer> {
     const page = await context.newPage();
     // Never let a template reach the network: everything (fonts, images) is inlined.
     await page.route("**/*", (route) => (route.request().url().startsWith("data:") ? route.continue() : route.abort()));
-    await page.setContent(html, { waitUntil: "load" });
-    await page.evaluate(() => document.fonts.ready);
-    return Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true }));
+    await within("Page load", 15_000, page.setContent(html, { waitUntil: "load" }));
+    await within("Font load", 10_000, page.evaluate(() => document.fonts.ready));
+    return Buffer.from(await within("PDF print", 20_000, page.pdf({ preferCSSPageSize: true, printBackground: true })));
   } finally {
     await context.close();
   }
